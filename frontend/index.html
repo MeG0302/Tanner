@@ -1,13 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tanner.xyz Aggregator</title>
     
-    <!-- 
-      Required for all Web3 functionality (connecting wallet, sending transactions).
-    -->
+    <!-- Required for all Web3 functionality (connecting wallet, sending transactions). -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
     
     <!-- Tailwind CSS -->
@@ -50,9 +48,11 @@
         -moz-appearance: textfield;
       }
     </style>
-  </head>
-  <body class="bg-black">
+</head>
+<body class="bg-black">
     <!-- Your React app (app.jsx) will be injected into this div -->
     <div id="root"></div>
-  </body>
+    <!-- CRITICAL FIX: This line loads the main React application bundle -->
+    <script type="module" src="/src/app.jsx"></script>
+</body>
 </html>
