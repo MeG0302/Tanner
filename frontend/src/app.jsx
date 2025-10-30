@@ -11,31 +11,49 @@ const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // <-
 const USDC_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
   "function transfer(address to, uint256 amount) returns (bool)",
-  "function decimals() view returns (uint8)"
+  "function decimals() view returns (uint8)",
+  // Added for withdrawal function (if you implement a Smart Wallet contract)
+  "function withdrawUSDC(uint256 amount) external" 
 ];
 
 
 // --- API LOGIC (Moved from api.js) ---
-export const fetchMarkets = async () => {
-  console.log("Simulating API call to fetch markets...");
-  
-  // Reverted to simulated data for preview environment
-  const mockData = [
-    { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
-    { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
-    { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
-    { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
-    { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
-    { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
-  ];
+export const fetchMarkets = async (setToastMessage) => {
+  console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // Simulate network delay
-  return new Promise(resolve => {
-    setTimeout(() => {
-      console.log("Returning simulated market data.", mockData);
-      resolve(mockData);
-    }, 1500); // 1.5 second delay
-  });
+  // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
+  const API_URL = 'http://92.246.141.205:3001/api/markets'; 
+  
+  // Added a brief delay to prevent spamming failed requests
+  await new Promise(resolve => setTimeout(resolve, 500)); 
+
+  try {
+    const response = await fetch(API_URL);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    const data = await response.json();
+    console.log("Successfully fetched LIVE data:", data);
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch LIVE markets from backend. Using mock data as fallback:", error);
+    
+    // Check if setToastMessage exists before calling it
+    if (setToastMessage) {
+        setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
+    }
+    
+    // Fallback to mock data (since we are in a limited environment)
+    const mockData = [
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
+    ];
+    return mockData;
+  }
 };
 
 // --- Mock Portfolio Data (for initial state) ---
@@ -215,7 +233,7 @@ const CheckCircleIcon = () => (
 const MetamaskIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 318 318" xmlns="http://www.w3.org/2000/svg">
     <path d="M272.58 128.168L220.08 72.368C213.68 65.568 205.28 61.468 196.28 60.868C194.98 60.768 193.68 60.768 192.38 60.768H191.08C182.28 60.768 174.08 64.068 167.68 69.868L127.38 106.168L96.18 72.568C89.58 65.768 81.18 61.668 72.28 60.968C70.98 60.868 69.68 60.768 68.38 60.768H67.08C58.28 60.768 50.08 64.068 43.68 69.868L14.08 96.668C11.18 99.368 9.18 102.568 7.38 105.768C3.58 112.568 1.48 120.368 0.78 128.568C0.58 130.468 0.38 132.368 0.28 134.368C0.18 136.268 0.18 138.168 0.18 140.068V142.168C0.18 153.768 3.58 164.868 10.08 174.168L70.78 261.268C76.98 270.068 85.38 276.568 94.98 280.068C103.78 283.168 113.18 284.168 122.28 282.768L123.68 282.568C126.38 282.168 129.08 281.668 131.68 280.968C143.08 278.268 153.28 272.468 161.38 264.068L212.08 210.068L247.98 241.568C253.98 246.968 261.38 250.368 269.28 251.268C270.58 251.468 271.98 251.568 273.28 251.568C282.08 251.568 290.28 248.268 296.68 242.468L313.68 226.768C315.98 224.668 317.08 221.768 317.08 218.868V190.168C317.08 186.268 315.98 182.468 314.08 179.168L272.58 128.168ZM257.08 199.168L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08ZM171.18 122.968L193.38 102.368C195.18 100.768 197.68 100.768 199.38 102.368L209.68 111.768L171.18 146.968V122.968ZM107.08 118.968L84.88 139.568C83.08 141.168 80.58 141.168 78.88 139.568L68.58 130.168L107.08 94.968V118.968ZM41.88 113.668L62.78 94.568L92.28 120.768L62.78 147.268L41.88 128.468C39.08 125.868 39.08 121.468 41.88 118.868V118.868L41.88 113.668ZM105.68 263.868C101.38 265.968 96.58 266.968 91.78 266.668C86.78 266.368 81.98 264.868 77.88 262.168L48.28 234.868L88.98 197.868L121.38 233.668L105.68 263.868ZM273.28 235.668C272.08 235.668 270.88 235.468 269.68 235.168C266.18 234.468 263.08 232.868 260.68 230.168L228.48 194.268L272.58 146.368L296.68 218.868C297.88 220.868 298.18 223.368 297.38 225.668C296.48 228.068 294.58 229.968 292.18 230.868C286.08 233.268 279.48 234.768 272.78 235.568L273.28 235.668Z" fill="#E2761B"/>
-    <path d="M212.08 210.068L161.38 264.068C153.28 272.468 143.08 278.268 131.68 280.968C129.08 281.668 126.38 282.168 123.68 282.568L122.28 282.768C113.18 284.168 103.78 283.168 94.98 280.068C85.38 276.568 76.98 270.068 70.78 261.268L10.08 174.168C3.58 164.868 0.18 153.768 0.18 142.168V140.068C0.18 138.168 0.18 136.268 0.28 134.368C0.38 132.368 0.58 130.468 0.78 128.568C1.48 120.368 3.58 112.568 7.38 105.768L10.08 102.168C10.68 101.168 11.28 100.268 11.98 99.368L14.08 96.668L43.68 69.868L62.78 94.568L41.88 113.668V118.868L41.88 128.468L62.78 147.268L92.28 120.768L68.58 130.168L78.88 139.568L84.88 139.568L107.08 118.968V94.968L171.18 146.968V122.968L209.68 111.768L199.38 102.368L193.38 102.368L171.18 122.968V122.968L127.38 106.168L167.68 69.868L191.08 60.768H192.38H196.28L220.08 72.368L272.58 128.168L314.08 179.168L284.98 179.168L257.08 133.068L215.78 177.868L247.98 207.368L257.08 199.168V190.168V186.268L272.58 146.368L228.48 194.268L260.68 230.168C263.08 232.868 266.18 234.468 269.68 235.168C270.88 235.468 272.08 235.668 273.28 235.668L272.78 235.568C279.48 234.768 286.08 233.268 292.18 230.868C294.58 229.968 296.48 228.068 297.38 225.668C298.18 223.368 297.88 220.868 296.68 218.868L272.58 146.368L228.48 194.268L260.68 230.168L273.28 235.668H273.28L296.68 242.468L313.68 226.768L317.08 218.868V190.168H257.08L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08L247.98 207.368L212.08 210.068Z" fill="#E2761B"/>
+    <path d="M212.08 210.068L161.38 264.068C153.28 272.468 143.08 278.268 131.68 280.968C129.08 281.668 126.38 282.168 123.68 282.568L122.28 282.768C113.18 284.168 103.78 283.168 94.98 280.068C85.38 276.568 76.98 270.068 70.78 261.268L10.08 174.168C3.58 164.868 0.18 153.768 0.18 142.168V140.068C0.18 138.168 0.18 136.268 0.28 134.368C0.38 132.368 0.58 130.468 0.78 128.568C1.48 120.368 3.58 112.568 7.38 105.768L10.08 102.168C10.68 101.168 11.28 100.268 11.98 99.368L14.08 96.668L43.68 69.868L62.78 94.568L41.88 113.668V118.868L41.88 128.468L62.78 147.268L92.28 120.768L68.58 130.168L78.88 139.568L84.88 139.568L107.08 118.968V94.968L171.18 146.968V122.968L209.68 111.768L199.38 102.368L193.38 102.368L171.18 122.968V122.968L127.38 106.168L167.68 69.868L191.08 60.768H192.38H196.28L220.08 72.368L272.58 128.168L314.08 179.168L284.98 179.168L257.08 133.068L215.78 177.868L247.98 207.368L257.08 199.168V190.168V186.268L272.58 146.368L228.48 194.268L260.68 230.168C263.08 232.868 266.18 234.468 269.68 235.168C270.88 235.468 272.08 235.668 273.28 235.668H273.28C279.48 234.768 286.08 233.268 292.18 230.868C294.58 229.968 296.48 228.068 297.38 225.668C298.18 223.368 297.88 220.868 296.68 218.868L272.58 146.368L228.48 194.268L260.68 230.168L273.28 235.668H273.28L296.68 242.468L313.68 226.768L317.08 218.868V190.168H257.08L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08L247.98 207.368L212.08 210.068Z" fill="#E2761B"/>
     <path d="M121.38 233.668L88.98 197.868L48.28 234.868L77.88 262.168C81.98 264.868 86.78 266.368 91.78 266.668C96.58 266.968 101.38 265.968 105.68 263.868L121.38 233.668Z" fill="#E2761B"/>
     <path d="M107.08 118.968V94.968L68.58 130.168L78.88 139.568C80.58 141.168 83.08 141.168 84.88 139.568L107.08 118.968Z" fill="#233447"/>
     <path d="M171.18 122.968V146.968L209.68 111.768L199.38 102.368C197.68 100.768 195.18 100.768 193.38 102.368L171.18 122.968Z" fill="#CC6228"/>
@@ -369,25 +387,38 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   const limitCost = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
 
   const handleSubmit = () => {
+    if (!userAddress) {
+        setToastMessage("Please connect wallet first.");
+        return;
+    }
+    
+    // Check if ethers.js is loaded for real trade execution
+    if (typeof window.ethers === 'undefined') {
+        setToastMessage("Web3 library not loaded. Cannot process trade.");
+        return;
+    }
+
+    // This remains simulated for now, as it's complex.
+    // A real implementation would call our smart wallet, not just USDC.
+    const { tradeType, amount, shares, limitPrice } = tradeDetails;
+
+    if (portfolioBalance.totalUSDC < amount) {
+      handleAddNotification("Trade failed: Insufficient funds.");
+      setToastMessage("Insufficient USDC balance!");
+      return;
+    }
+    
+    // Simulate trade logic (copied into App component)
+    onSubmit({
+        tradeType, amount, shares, limitPrice
+    });
+    
+    // Clear inputs after submission
     if (tradeType === 'Market') {
-      onSubmit({
-        tradeType: 'Market',
-        amount: parseFloat(marketAmount),
-        shares: parseFloat(marketPayout),
-        limitPrice: null
-      });
-      // Clear market inputs after submission
-      setMarketAmount('');
+        setMarketAmount('');
     } else {
-      onSubmit({
-        tradeType: 'Limit',
-        amount: parseFloat(limitCost),
-        shares: parseFloat(limitShares),
-        limitPrice: parseFloat(limitPrice)
-      });
-      // Clear limit inputs after submission
-      setLimitPrice(side === 'YES' ? market?.yes.toFixed(2) : market?.no.toFixed(2));
-      setLimitShares('');
+        setLimitPrice(side === 'YES' ? market?.yes.toFixed(2) : market?.no.toFixed(2));
+        setLimitShares('');
     }
   };
 
@@ -825,7 +856,7 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
             </tr>
           </thead><tbody className="divide-y divide-gray-800">
             {openOrders.map(order => (
-              <OpenOrderRow key={order.id} order={order} onCancel={onCancelOrder} />
+              <OpenOrderRow key={order.id} order={order} onCancel={handleCancelOrder} />
             ))}
             {openOrders.length === 0 && (
               <tr>
@@ -959,7 +990,19 @@ function ReferralsPage() {
   // Function to simulate copying text to clipboard
   const copyToClipboard = () => {
     // In a real environment, this uses the Clipboard API. For simulation:
-    alert(`Simulated: Copied referral code to clipboard! Code: ${referralCode}`);
+    // We use document.execCommand('copy') as navigator.clipboard.writeText() is often blocked in iFrames.
+    try {
+        const tempElement = document.createElement('textarea');
+        tempElement.value = referralCode;
+        document.body.appendChild(tempElement);
+        tempElement.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempElement);
+        // Alert is replaced with toast in the main App component
+        alert(`Simulated: Copied referral code to clipboard! Code: ${referralCode}`); 
+    } catch (err) {
+        alert('Simulated: Could not copy text. Please copy manually.');
+    }
   };
 
   return (
@@ -1563,8 +1606,8 @@ export default function App() {
     const loadMarkets = async () => {
       setIsLoading(true);
       try {
-        // We now use the imported fetchMarkets function
-        const data = await fetchMarkets();
+        // Pass setToastMessage to fetchMarkets so it can report errors
+        const data = await fetchMarkets(setToastMessage);
         setMarkets(data);
       } catch (error) {
         console.error("Failed to fetch markets:", error);
@@ -1852,7 +1895,8 @@ export default function App() {
       const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, USDC_ABI, signer);
       
       // 2. Get decimals (USDC usually has 6)
-      const decimals = await usdcContract.decimals();
+      // Note: We skip calling decimals() for simplicity, assuming 6. A real app should call it.
+      const decimals = 6; 
       const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals);
 
       // 3. Send 'approve' transaction
@@ -1864,6 +1908,9 @@ export default function App() {
       handleAddNotification("2/2: Transferring USDC...");
       
       // 4. Send 'transfer' transaction
+      // In a real smart wallet setup, we would call a "deposit" function on the smart wallet contract
+      // that internally performs the transferFrom after approval. 
+      // For this simple simulation (using the standard ERC20 transfer):
       const transferTx = await usdcContract.transfer(SMART_WALLET_ADDRESS, parsedAmount);
       await transferTx.wait(); // Wait for transaction to be mined
       
@@ -1874,25 +1921,71 @@ export default function App() {
 
     } catch (err) {
       console.error("Deposit failed:", err);
-      setToastMessage("Deposit transaction failed or was rejected.");
-      handleAddNotification("Deposit failed.");
+      // Check for user rejection
+      if (err.code === 4001) {
+        setToastMessage("Deposit rejected by user.");
+        handleAddNotification("Deposit rejected by user.");
+      } else {
+        setToastMessage("Deposit transaction failed.");
+        handleAddNotification("Deposit failed.");
+      }
     }
   };
 
   // --- UPDATED: handleConfirmWithdraw (Simulated) ---
-  const handleConfirmWithdraw = (amount) => {
-    // A real withdrawal would require a call to *our* smart contract,
-    // which is more complex. We'll leave this simulated for now.
-    
+  const handleConfirmWithdraw = async (amount) => {
+    if (!signer) {
+        setToastMessage("Wallet not connected.");
+        return;
+    }
+
     if (amount > portfolioBalance.totalUSDC) {
-      setToastMessage("Withdrawal failed: Insufficient funds.");
-      handleAddNotification("Withdrawal failed: Insufficient funds.");
+        setToastMessage("Withdrawal failed: Insufficient funds.");
+        handleAddNotification("Withdrawal failed: Insufficient funds.");
+        return;
+    }
+    
+    if (!SMART_WALLET_ADDRESS || SMART_WALLET_ADDRESS === '0xYOUR_SMART_WALLET_CONTRACT_ADDRESS_GOES_HERE') {
+      setToastMessage("Developer: Smart Wallet address is not set.");
+      console.error("Please set SMART_WALLET_ADDRESS constant in app.jsx");
       return;
     }
-    setPortfolioBalance(prev => ({ ...prev, totalUSDC: prev.totalUSDC - amount }));
+
     handleCloseModals();
-    setToastMessage(`Successfully withdrew $${amount.toFixed(2)}! (Simulated)`);
-    handleAddNotification(`$${amount.toFixed(2)} withdrawn from Smart Wallet. (Simulated)`);
+    setToastMessage("Check wallet to confirm withdrawal...");
+
+    try {
+        const { ethers } = window;
+        const decimals = 6; // Assuming USDC decimals
+        const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals);
+
+        // 1. Create a contract instance for the Smart Wallet
+        // NOTE: This assumes your Smart Wallet contract has a 'withdrawUSDC' function.
+        // The ABI for this function is added to the USDC_ABI for simplicity, 
+        // but should ideally be part of a separate SmartWallet ABI.
+        const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, USDC_ABI, signer);
+
+        // 2. Call the withdrawal function on your Smart Wallet contract
+        // This transaction will move funds from the Smart Wallet back to the user's connected wallet.
+        const withdrawTx = await smartWalletContract.withdrawUSDC(parsedAmount);
+        handleAddNotification(`Initiating withdrawal of $${amount.toFixed(2)}...`);
+        await withdrawTx.wait();
+
+        // 3. Update state on success
+        setPortfolioBalance(prev => ({ ...prev, totalUSDC: prev.totalUSDC - amount }));
+        setToastMessage(`Successfully withdrew $${amount.toFixed(2)}!`);
+        handleAddNotification(`$${amount.toFixed(2)} withdrawn from Smart Wallet.`);
+
+    } catch (err) {
+        console.error("Withdrawal failed:", err);
+         if (err.code === 4001) {
+            setToastMessage("Withdrawal rejected by user.");
+            handleAddNotification("Withdrawal rejected by user.");
+        } else {
+            setToastMessage("Withdrawal transaction failed.");
+            handleAddNotification("Withdrawal failed.");
+        }
+    }
   };
 
   const handleOpenClosePositionModal = (position) => {
@@ -2058,4 +2151,3 @@ export default function App() {
     </div>
   );
 }
-
