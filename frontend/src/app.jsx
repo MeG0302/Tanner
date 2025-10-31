@@ -32,10 +32,10 @@ function generateUniqueId() {
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // --- FIX: Reverting to HTTP to bypass SSL/TLS handshake error (ERR_SSL_PROTOCOL_ERROR) ---
-  // WARNING: This may trigger a browser 'Mixed Content' error if the front-end is HTTPS.
-  // The actual fix requires configuration on the 92.246.141.205 server.
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  // --- FIX: Reverting to a relative path. ---
+  // This is the ideal path if running with a development server or proxy (like Vite's proxy) 
+  // that can forward the request securely to http://92.246.141.205:3001 behind the scenes.
+  const API_URL = '/api/markets';
   // --- END OF FIX ---
 
   // Added a brief delay to prevent spamming failed requests
@@ -58,7 +58,7 @@ export const fetchMarkets = async (setToastMessage) => {
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The browser is blocking the insecure HTTP request (Mixed Content Policy).");
+        console.error("3. The proxy/development configuration for the relative path is missing or incorrect.");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
