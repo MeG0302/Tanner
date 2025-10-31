@@ -67,7 +67,7 @@ async function fetchPolymarketData() {
     // --- DEBUGGING: Validate expected data structure ---
     if (!data || !Array.isArray(data.data)) {
       console.error('Invalid Polymarket response structure. Expected { data: [...] }', data);
-      throw new Error('Invalid Polymymarket response structure');
+      throw new Error('Invalid Polymarket response structure');
     }
 
     return data.data.map(normalizePolymarket).filter(m => m !== null); // Filter out nulls
