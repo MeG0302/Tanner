@@ -25,15 +25,13 @@ function generateUniqueId() {
   );
 }
 
-// --- API LOGIC (Moved from api.js) ---
-// --- FIX: Reverted to fetch from YOUR backend. ---
-// The browser CANNOT call Polymarket/Kalshi APIs directly due to CORS policy.
-// Your backend server (at 92.246.141.205:3001) must fetch the data.
+
+// --- API LOGIC ---
+// This function now calls YOUR backend, not the external APIs.
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
-  // --- FIX: Reverted to absolute URL for the VPS backend ---
+  // !!! CRITICAL: This URL points to YOUR backend server (server.js) !!!
   const API_URL = 'http://92.246.141.205:3001/api/markets';
   
   // Added a brief delay to prevent spamming failed requests
@@ -48,9 +46,9 @@ export const fetchMarkets = async (setToastMessage) => {
     console.log("Successfully fetched LIVE data:", data);
     return data;
   } catch (error) {
-    // --- FIX: Added more detailed logging to explain the connection error ---
+    // This console.error is critical for debugging
     console.error("------------------------------------------------");
-    console.error("BACKEND FETCH FAILED:", error.message);
+    console.error(`BACKEND FETCH FAILED: ${error.message}`);
     console.error("This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at:", API_URL);
     console.error("Possible Causes:");
     console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
@@ -58,7 +56,7 @@ export const fetchMarkets = async (setToastMessage) => {
     console.error("3. The API_URL constant in app.jsx is incorrect.");
     console.error("Falling back to mock data as a temporary measure.");
     console.error("------------------------------------------------");
-    
+
     // Check if setToastMessage exists before calling it
     if (setToastMessage) {
         setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
@@ -76,7 +74,6 @@ export const fetchMarkets = async (setToastMessage) => {
     return mockData;
   }
 };
-
 
 // --- Mock Portfolio Data (for initial state) ---
 const initialPositions = [
@@ -138,17 +135,22 @@ const mockReferralData = {
 
 
 // --- Helper function for logos (Corrected order) ---
-// --- FIX: Using placeholders as the images are not in your public folder ---
+// --- FIX: Using placeholders to avoid 404 errors from missing images ---
 const getLogo = (platform) => {
+  const size = "24x24";
+  const colors = "808080/FFFFFF"; // gray bg, white text
   switch (platform) {
     case 'Limitless':
-      return "https://placehold.co/24x24/1E1E1E/FFFFFF?text=L"; // Image 1 (Limitless)
+      // return "fLHeW0Ji_400x400.jpg"; // Image 1 (Limitless)
+      return `https://placehold.co/${size}/${colors}?text=L`;
     case 'Polymarket':
-      return "https://placehold.co/24x24/3366FF/FFFFFF?text=P"; // Image 2 (Polymarket)
+      // return "mqiIx1cj_400x400.jpg"; // Image 2 (Polymarket)
+      return `https://placehold.co/${size}/${colors}?text=P`;
     case 'Kalshi':
-      return "https://placehold.co/24x24/FFFFFF/000000?text=K"; // Image 3 (Kalshi)
+      // return "1qzNBZII_400x400.jpg"; // Image 3 (Kalshi)
+      return `https://placehold.co/${size}/${colors}?text=K`;
     default:
-      return "https://placehold.co/24x24/808080/FFFFFF?text=?";
+      return `https://placehold.co/${size}/${colors}?text=?`;
   }
 };
 
@@ -405,8 +407,8 @@ function SimulatedOrderBook({ onPriceClick }) {
 function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
   const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
-  const [limitPrice, setLimitPrice] = useState('');     // Price for Limit
-  const [limitShares, setLimitShares] = useState('');   // Amount in Shares for Limit
+  const [limitPrice, setLimitPrice] = useState('');    // Price for Limit
+  const [limitShares, setLimitShares] = useState('');  // Amount in Shares for Limit
 
   useEffect(() => {
       setTradeType('Market');
@@ -1018,14 +1020,13 @@ function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
 
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden max-w-3xl">
         <table className="w-full table-auto">
-          <thead className="border-b border-gray-800">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">User Address</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total P&L</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total Volume</th>
-            </tr>
-          </thead>
+          {/* FIX: Removed whitespace causing DOM warning */}
+          <thead className="border-b border-gray-800"><tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">User Address</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total P&L</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total Volume</th>
+          </tr></thead>
           <tbody className="divide-y divide-gray-800">
             {leaderboardData.map((trader, index) => ( // <-- UPDATED: Use prop
               <tr key={trader.rank} className="hover:bg-gray-900/40 transition-colors">
@@ -1173,7 +1174,7 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
 
   const walletOptions = [
     { name: 'Metamask', icon: <MetamaskIcon /> }, // UPDATED
-    { name: 'OKX', icon: <OKXIcon /> },       // UPDATED
+    { name: 'OKX', icon: <OKXIcon /> },     // UPDATED
     { name: 'Rabby', icon: <RabbyIcon /> },     // UPDATED (Fixed typo)
   ];
 
@@ -1853,9 +1854,9 @@ export default function App() {
 
     // Validation is now done in TradePanel before this is called
     // if (portfolioBalance.totalUSDC < amount) {
-    //  handleAddNotification("Trade failed: Insufficient funds.");
-    //  setToastMessage("Insufficient USDC balance!");
-    //  return;
+    //   handleAddNotification("Trade failed: Insufficient funds.");
+    //   setToastMessage("Insufficient USDC balance!");
+    //   return;
     // }
 
     // Update balance
@@ -2044,10 +2045,10 @@ export default function App() {
          if (err.code === 4001) {
             setToastMessage("Withdrawal rejected by user.");
             handleAddNotification("Withdrawal rejected by user.");
-        } else {
+         } else {
             setToastMessage("Withdrawal transaction failed.");
             handleAddNotification("Withdrawal failed.");
-        }
+         }
     }
   };
 
@@ -2133,7 +2134,7 @@ export default function App() {
             openOrders={openOrders}
             onCancelOrder={handleCancelOrder}
             onDeposit={handleOpenDepositModal}     // <-- UPDATED
-            onWithdraw={handleOpenWithdrawModal}     // <-- UPDATED
+            onWithdraw={handleOpenWithdrawModal}    // <-- UPDATED
             onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal} // <-- NEW
           />
