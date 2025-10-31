@@ -32,11 +32,8 @@ function generateUniqueId() {
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // --- !!! THIS IS THE FIX !!! ---
-  // The relative path '/api/markets' was failing in the current environment
-  // because it couldn't be resolved from a 'blob:' URL.
-  // Changed it to the full, absolute URL of your backend.
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  // --- FIX: Using HTTPS to avoid Mixed Content errors when running on secure connections ---
+  const API_URL = 'https://92.246.141.205:3001/api/markets';
   // --- END OF FIX ---
 
   // Added a brief delay to prevent spamming failed requests
@@ -59,7 +56,7 @@ export const fetchMarkets = async (setToastMessage) => {
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The Vite proxy config in vite.config.js is incorrect.");
+        console.error("3. Your server is not configured for HTTPS on port 3001 (which this app must use).");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
@@ -1681,10 +1678,10 @@ function MarketCard({ market, onMarketClick }) {
   
   // --- UPDATED: Get top 2 outcomes (can be undefined) ---
   const topOutcome = outcomes[0];
-  const secondOutcome = outcomes[1];
+  // const secondOutcome = outcomes[1]; // No longer needed for card
 
   // Check if it's a simple Yes/No market
-  const isBinary = topOutcome?.name === 'Yes' && secondOutcome?.name === 'No';
+  // const isBinary = topOutcome?.name === 'Yes' && secondOutcome?.name === 'No'; // No longer needed for card
 
   return (
     <div
@@ -1711,42 +1708,23 @@ function MarketCard({ market, onMarketClick }) {
         </h3>
       </div>
       
-      {/* --- UPDATED: Price Display (Conditional Rendering) --- */}
+      {/* --- UPDATED: Price Display (Polymarket Style) --- */}
       <div className="flex items-center justify-between space-x-4 mt-auto"> {/* Added mt-auto to push to bottom */}
-        {/* Case 1: Outcomes exist */}
+        {/* Only show the top outcome */}
         {topOutcome ? (
-          <>
-            {/* Top Outcome (Always show) */}
-            <div className="flex items-center space-x-2">
-              <span className="text-3xl font-bold text-blue-400">
-                {(topOutcome.price * 100).toFixed(0)}¢
-              </span>
-              <span className="text-sm text-gray-400 truncate max-w-[80px]">{topOutcome.name}</span>
-            </div>
-
-            {/* Second Outcome (Show if binary or if it exists and is not binary) */}
-            {isBinary && secondOutcome && (
-              <div className="flex items-center space-x-2">
-                <span className="text-3xl font-bold text-red-400">
-                  {(secondOutcome.price * 100).toFixed(0)}¢
-                </span>
-                <span className="text-sm text-gray-400">{secondOutcome.name}</span>
-              </div>
-            )}
-
-            {!isBinary && secondOutcome && (
-              <div className="flex items-center space-x-2">
-                <span className="text-3xl font-bold text-gray-500">
-                  {(secondOutcome.price * 100).toFixed(0)}¢
-                </span>
-                <span className="text-sm text-gray-400 truncate max-w-[80px]">{secondOutcome.name}</span>
-              </div>
-            )}
-          </>
+          <div className="flex items-center space-x-2">
+            <span className="text-3xl font-bold text-blue-400">
+              {(topOutcome.price * 100).toFixed(0)}¢
+            </span>
+            <span className="text-sm text-gray-400 truncate max-w-[120px]">{topOutcome.name}</span>
+          </div>
         ) : (
-          /* Case 2: No outcomes */
-          <div className="flex items-center justify-center w-full">
-            <span className="text-sm text-gray-500">No outcome data.</span>
+          // If no outcome data, show N/A
+          <div className="flex items-center space-x-2">
+            <span className="text-3xl font-bold text-gray-500">
+              N/A
+            </span>
+            <span className="text-sm text-gray-400">No data</span>
           </div>
         )}
       </div>
@@ -1934,7 +1912,7 @@ export default function App() {
       prevPositions.map(pos => {
         const market = markets.find(m => m.id === pos.marketId);
         // Find the specific outcome within that market
-        const outcome = market?.outcomes.find(o => o.name === pos.outcomeName);
+        const outcome = market?.outcomes?.find(o => o.name === pos.outcomeName); // Added safe navigation
         
         if (!market || !outcome) return pos; // Market or outcome data not loaded
 
