@@ -32,7 +32,12 @@ export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
   // !!! CRITICAL: This MUST point to your running backend server !!!
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  const TARGET_URL = 'http://92.246.141.205:3001/api/markets';
+  
+  // --- FIX: Mixed Content Error ---
+  // The frontend is on HTTPS, but the backend is on HTTP.
+  // We must use a CORS proxy to bypass the browser's "Mixed Content" security block.
+  const API_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
 
   // Added a brief delay to prevent spamming failed requests
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -50,11 +55,11 @@ export const fetchMarkets = async (setToastMessage) => {
     console.log("------------------------------------------------");
     console.error("BACKEND FETCH FAILED: Failed to fetch", error);
     if (error.message.includes('Failed to fetch')) {
-        console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${API_URL}`);
+        console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${TARGET_URL}`);
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The API_URL constant in app.jsx is incorrect.");
+        console.error("3. The API_URL constant in app.jsx is incorrect (or blocked by Mixed Content).");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
