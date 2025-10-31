@@ -1,6 +1,7 @@
 /**
  * Tanner.xyz App
  * Aggregated Prediction Market Frontend
+ * --- V3 (Multi-Outcome Markets) ---
  */
 import React, { useState, useEffect, useRef } from 'react';
 
@@ -70,24 +71,36 @@ export const fetchMarkets = async (setToastMessage) => {
 
     // Fallback to mock data (since we are in a limited environment)
     const mockData = [
-      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000, history: [] },
-      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000, history: [] },
-      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', shortTitle: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000, history: [] },
-      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', shortTitle: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000, history: [] },
-      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', shortTitle: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000, history: [] },
-      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', shortTitle: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000, history: [] },
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', volume_24h: 500000, 
+        outcomes: [
+          { name: 'Yes', price: 0.52, history: [] },
+          { name: 'No', price: 0.48, history: [] }
+        ]
+      },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', volume_24h: 400000,
+        outcomes: [
+          { name: 'Yes', price: 0.47, history: [] },
+          { name: 'No', price: 0.53, history: [] }
+        ]
+      },
+      { id: 3, category: 'Politics', title: 'Who will win the 2024 NYC Mayoral Election?', shortTitle: 'Who will win the 2024 NYC Mayoral Election?', platform: 'Polymarket', volume_24h: 300000, 
+        outcomes: [
+          { name: 'Zohran Mamdani', price: 0.94, history: [] },
+          { name: 'Andrew Cuomo', price: 0.06, history: [] },
+          { name: 'Curtis Sliwa', price: 0.01, history: [] }
+        ]
+      },
     ];
     // Simulate history for mock data
-    const addHistory = (market) => ({ ...market, history: generateChartData() });
+    const addHistory = (market) => ({ ...market, outcomes: market.outcomes.map(o => ({ ...o, history: generateChartData(o.price) })) });
     return mockData.map(addHistory);
   }
 };
 
 // --- Mock Portfolio Data (for initial state) ---
 const initialPositions = [
-  { id: generateUniqueId(), marketId: 1, title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
-  { id: generateUniqueId(), marketId: 3, title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
-  { id: generateUniqueId(), marketId: 5, title: 'Will the LA Lakers win the 2026 NBA Championship?', side: 'NO', shares: 58.82, avgPrice: 0.85, currentValue: 50, pnl: 0 },
+  { id: generateUniqueId(), marketId: 1, outcomeName: 'Yes', title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
+  { id: generateUniqueId(), marketId: 3, outcomeName: 'Zohran Mamdani', title: 'Who will win the 2024 NYC Mayoral Election?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
 ];
 
 const initialPortfolioBalance = {
@@ -158,16 +171,16 @@ const getLogo = (platform) => {
 };
 
 // --- NEW: Mock Price Chart Data Generator (USED AS FALLBACK) ---
-const generateChartData = () => {
+const generateChartData = (startPrice) => {
   let data = [];
-  let price = 0.5; // Starting price
+  let price = startPrice;
   const now = Math.floor(Date.now() / 1000); // Current time in seconds
   const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
   const dataPoints = 168; // One point per hour for 7 days (7 * 24)
   const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
 
   for (let i = 0; i < dataPoints; i++) {
-    const change = (Math.random() - 0.5) * 0.02;
+    const change = (Math.random() - 0.5) * 0.02; // Small random change
     price += change;
     if (price > 0.99) price = 0.99;
     if (price < 0.01) price = 0.01;
@@ -281,9 +294,10 @@ const RabbyIcon = () => (
 // ====================================================================
 
 // --- *** NEW: HISTORICAL CHART COMPONENT *** ---
-// This replaces the old SimulatedPriceChart
-function HistoricalChart({ data }) {
+// This component now accepts multiple outcomes and plots them all.
+function HistoricalChart({ outcomes }) {
   const chartContainerRef = useRef(null);
+  const chartColors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6']; // blue, pink, green, yellow, purple
 
   useEffect(() => {
     // Check if the charting library is loaded
@@ -293,7 +307,7 @@ function HistoricalChart({ data }) {
     }
     
     // Ensure we have data and a ref
-    if (!data || data.length === 0 || !chartContainerRef.current) {
+    if (!outcomes || outcomes.length === 0 || !chartContainerRef.current) {
       return;
     }
 
@@ -325,14 +339,22 @@ function HistoricalChart({ data }) {
       crosshair: {
         mode: window.LightweightCharts.CrosshairMode.Normal,
       },
+      // --- NEW: Add a legend ---
+      legend: {
+        visible: true,
+        textColor: '#D1D5DB',
+      },
     });
 
-    const lineSeries = chart.addLineSeries({
-      color: '#3B82F6', // blue-600
-      lineWidth: 2,
+    // --- NEW: Add a line series FOR EACH outcome ---
+    outcomes.forEach((outcome, index) => {
+      const lineSeries = chart.addLineSeries({
+        color: chartColors[index % chartColors.length], // Cycle through colors
+        lineWidth: 2,
+        title: outcome.name, // This will appear in the legend
+      });
+      lineSeries.setData(outcome.history);
     });
-
-    lineSeries.setData(data);
     
     // Fit the chart to the data
     chart.timeScale().fitContent();
@@ -350,10 +372,10 @@ function HistoricalChart({ data }) {
       chart.remove();
     };
 
-  }, [data]); // Re-run effect if data changes
+  }, [outcomes]); // Re-run effect if outcomes data changes
 
   // If no data, show a message
-  if (!data || data.length === 0) {
+  if (!outcomes || outcomes.length === 0) {
     return (
       <div ref={chartContainerRef} className="w-full h-[300px] flex items-center justify-center text-gray-500">
         No historical data available for this market.
@@ -438,43 +460,43 @@ function SimulatedOrderBook({ onPriceClick }) {
 }
 
 
-// --- RENAMED: TradePanel Component (was TradeConfirmModal) ---
-function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet, setToastMessage, handleAddNotification, portfolioBalance }) {
+// --- *** UPDATED: TradePanel Component *** ---
+// Now supports trading a specific outcome
+function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddress, setToastMessage, handleAddNotification, portfolioBalance, onClose }) {
   const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
   const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
   const [limitPrice, setLimitPrice] = useState('');     // Price for Limit
   const [limitShares, setLimitShares] = useState('');   // Amount in Shares for Limit
 
+  // This effect updates the panel when the selected outcome or side changes
   useEffect(() => {
-    setTradeType('Market');
-    setMarketAmount('');
-    // --- FIX: Add check for market existence ---
-    if (market && typeof market.yes === 'number' && typeof market.no === 'number') {
-      setLimitPrice(side === 'YES' ? market.yes.toFixed(2) : market.no.toFixed(2)); // Pre-fill limit price
-    } else {
-      setLimitPrice('0.00');
+    if (selectedOutcome) {
+      setTradeType('Market');
+      setMarketAmount('');
+      setLimitShares('');
+      // Set the price based on YES or NO side
+      const price = (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price);
+      setLimitPrice(price.toFixed(2));
     }
-    setLimitShares('');
-  }, [market, side]); // Reset when market or side changes
+  }, [selectedOutcome, side]);
 
-  // Safely access prices, defaulting to 0.50 if not available
-  const marketPrice = (market && typeof market.yes === 'number' && typeof market.no === 'number') 
-    ? (side === 'YES' ? market.yes : market.no) 
-    : 0.50;
-    
-  if (!market) return null;
+  if (!selectedOutcome) return null; // Don't render if no outcome is selected
 
-
-  const marketPayout = (marketAmount > 0 && marketPrice > 0) ? (marketAmount / marketPrice).toFixed(2) : 0;
+  // Calculate the correct price for the trade
+  const tradePrice = (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price);
+  
+  // Calculate Market/Limit totals
+  const marketPayout = (marketAmount > 0 && tradePrice > 0) ? (marketAmount / tradePrice).toFixed(2) : 0;
   const limitCost = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
 
   const handleSubmit = () => {
     if (!userAddress) {
       setToastMessage("Please connect wallet first.");
+      onConnectWallet(); // Open wallet modal
       return;
     }
     
-    // Check if ethers.js is loaded for real trade execution
+    // Check if ethers.js is loaded
     if (typeof window.ethers === 'undefined') {
       setToastMessage("Web3 library not loaded. Cannot process trade.");
       return;
@@ -486,7 +508,7 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
         tradeType: 'Market',
         amount: parseFloat(marketAmount),
         shares: parseFloat(marketPayout),
-        limitPrice: null, // Market order doesn't have a limit price
+        limitPrice: null,
       };
     } else {
       tradeDetails = {
@@ -497,7 +519,7 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
       };
     }
     
-    // --- FIX: Validation moved from App.js to TradePanel ---
+    // Validation
     if (!portfolioBalance || typeof portfolioBalance.totalUSDC !== 'number') {
       handleAddNotification("Portfolio balance not loaded.");
       setToastMessage("Portfolio balance not loaded.");
@@ -512,13 +534,10 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
     // Call the main onSubmit handler (which is 'handleTradeSubmit' in App)
     onSubmit(tradeDetails);
     
-    // Clear inputs after submission
-    if (tradeType === 'Market') {
-      setMarketAmount('');
-    } else {
-      setLimitPrice(side === 'YES' ? marketPrice.toFixed(2) : marketPrice.toFixed(2));
-      setLimitShares('');
-    }
+    // Clear inputs and close panel
+    setMarketAmount('');
+    setLimitShares('');
+    onClose();
   };
 
   const handlePriceClick = (price) => {
@@ -528,24 +547,29 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   const isMarketSubmitDisabled = !marketAmount || parseFloat(marketAmount) <= 0;
   const isLimitSubmitDisabled = !limitPrice || parseFloat(limitPrice) <= 0 || !limitShares || parseFloat(limitShares) <= 0;
 
+  // Set button color based on side
+  const buttonClass = side === 'YES' 
+    ? 'bg-green-600 hover:bg-green-700' 
+    : 'bg-red-600 hover:bg-red-700';
+
   return (
     <div
       className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
     >
-      {/* --- NEW: YES/NO Side Toggle --- */}
-      <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
-        <button
-          onClick={() => onSideChange('YES')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'YES' ? 'bg-green-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-        >
-          YES
-        </button>
-        <button
-          onClick={() => onSideChange('NO')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'NO' ? 'bg-red-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-        >
-          NO
-        </button>
+      {/* --- Close Button --- */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-gray-500 hover:text-white"
+      >
+        <XIcon />
+      </button>
+
+      {/* --- Header --- */}
+      <h2 className="text-2xl font-bold text-white mb-4">
+        Buy {selectedOutcome.name}
+      </h2>
+      <div className={`text-lg font-medium mb-6 ${side === 'YES' ? 'text-green-400' : 'text-red-400'}`}>
+        {side} @ {(tradePrice * 100).toFixed(0)}¢
       </div>
 
       <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
@@ -596,7 +620,7 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
 
           <div className="text-sm text-gray-400 flex justify-between pt-2">
             <span>Price per Share</span>
-            <span className="text-white font-medium">${marketPrice.toFixed(2)}</span>
+            <span className="text-white font-medium">${tradePrice.toFixed(2)}</span>
           </div>
         </div>
       ) : (
@@ -611,6 +635,7 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
                   onChange={(e) => setLimitPrice(e.target.value)}
                   placeholder="0.00"
                   min="0"
+                  max="1"
                   step="0.01"
                   className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
@@ -666,9 +691,7 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
           className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
             ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
               ? 'bg-gray-700 cursor-not-allowed'
-              : (side === 'YES'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-red-600 hover:bg-red-700')
+              : buttonClass
             }
           `}
         >
@@ -680,12 +703,58 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   );
 }
 
-// --- NEW: Market Detail Page Component ---
-function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWallet, onSideChange, tradeSide, setToastMessage, handleAddNotification, portfolioBalance }) {
-  
-  // This state is no longer needed, as the new chart component is self-contained.
-  // const [chartData, setChartData] = useState([]);
+// --- *** NEW: OutcomeRow Component *** ---
+// This component displays a single candidate/outcome in the detail page list
+function OutcomeRow({ outcome, onSelectOutcome }) {
+  const price = outcome.price || 0;
+  const noPrice = 1 - price;
+  const priceCents = (price * 100).toFixed(0);
+  const noPriceCents = (noPrice * 100).toFixed(0);
 
+  return (
+    <tr className="border-b border-gray-800 hover:bg-gray-900/50">
+      <td className="p-4">
+        <div className="font-medium text-white">{outcome.name}</div>
+        {/* <div className="text-sm text-gray-400">$1,234,567 Vol.</div> */}
+      </td>
+      <td className="p-4 text-center">
+        <span className="font-bold text-2xl text-white">{priceCents}¢</span>
+      </td>
+      <td className="p-4 space-x-2 text-right">
+        <button 
+          onClick={() => onSelectOutcome(outcome, 'YES')}
+          className="bg-green-600/20 hover:bg-green-600/40 text-green-300 font-medium py-2 px-5 rounded-lg transition-colors"
+        >
+          Buy Yes {priceCents}¢
+        </button>
+        <button 
+          onClick={() => onSelectOutcome(outcome, 'NO')}
+          className="bg-red-600/20 hover:bg-red-600/40 text-red-300 font-medium py-2 px-5 rounded-lg transition-colors"
+        >
+          Buy No {noPriceCents}¢
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// --- *** UPDATED: Market Detail Page Component *** ---
+// Now shows a list of outcomes and passes the selected one to the trade panel.
+function MarketDetailPage({ 
+  market, 
+  onBack, 
+  onSubmit, 
+  userAddress, 
+  onConnectWallet, 
+  setToastMessage, 
+  handleAddNotification, 
+  portfolioBalance,
+  selectedOutcome,
+  onSelectOutcome,
+  tradeSide,
+  onCloseTradePanel
+}) {
+  
   if (!market) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
@@ -693,6 +762,9 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
       </main>
     );
   }
+
+  // Check if this is a simple Yes/No market
+  const isBinary = market.outcomes.length === 2 && market.outcomes[0].name === 'Yes' && market.outcomes[1].name === 'No';
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -720,39 +792,58 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Price Chart */}
           <div className="bg-gray-950 border border-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">7-Day Probability Chart</h2>
-            {/* --- *** THIS IS THE KEY CHANGE *** --- */}
-            {/* We now pass the market.history data from the backend to our new chart */}
-            <HistoricalChart data={market.history} />
+            <h2 className="text-xl font-semibold text-white mb-4">
+              {isBinary ? '7-Day Probability Chart' : '7-Day Odds Chart'}
+            </h2>
+            <HistoricalChart outcomes={market.outcomes} />
           </div>
 
-          {/* Market Rules/Details */}
-          <div className="bg-gray-950 border border-gray-800 rounded-lg p-6">
-            <h2 className="text-xl font-semibold text-white mb-4">Market Details</h2>
-            <p className="text-sm text-gray-400">
-              This is a simulated market. Resolution details would appear here.
-              <br/><br/>
-              Platform: {market.platform}
-              <br/>
-              Category: {market.category}
-            </p>
+          {/* --- NEW: Outcomes List (like the screenshot) --- */}
+          <div className="bg-gray-950 border border-gray-800 rounded-lg">
+            <h2 className="text-xl font-semibold text-white p-6 border-b border-gray-800">
+              Outcomes
+            </h2>
+            <table className="w-full table-auto">
+              <thead className="border-b border-gray-800">
+                <tr>
+                  <th className="p-4 text-left text-xs font-medium text-gray-400 uppercase">Outcome</th>
+                  <th className="p-4 text-center text-xs font-medium text-gray-400 uppercase">% Chance</th>
+                  <th className="p-4 text-right text-xs font-medium text-gray-400 uppercase">Trade</th>
+                </tr>
+              </thead>
+              <tbody>
+                {market.outcomes.map(outcome => (
+                  <OutcomeRow 
+                    key={outcome.name} 
+                    outcome={outcome} 
+                    onSelectOutcome={onSelectOutcome} 
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
         {/* Right Column (Trade Panel) */}
         <div className="lg:col-span-1">
-          <TradePanel
-            market={market}
-            side={tradeSide}
-            onSideChange={onSideChange}
-            onSubmit={onSubmit}
-            userAddress={userAddress}
-            onConnectWallet={onConnectWallet}
-            // --- FIX: Pass state down for validation ---
-            setToastMessage={setToastMessage}
-            handleAddNotification={handleAddNotification}
-            portfolioBalance={portfolioBalance}
-          />
+          {/* The TradePanel is now rendered based on `selectedOutcome` state */}
+          {selectedOutcome ? (
+            <TradePanel
+              selectedOutcome={selectedOutcome}
+              side={tradeSide}
+              onSubmit={onSubmit}
+              userAddress={userAddress}
+              onConnectWallet={onConnectWallet}
+              setToastMessage={setToastMessage}
+              handleAddNotification={handleAddNotification}
+              portfolioBalance={portfolioBalance}
+              onClose={onCloseTradePanel}
+            />
+          ) : (
+            <div className="bg-gray-950 border border-gray-800 rounded-2xl p-6 text-center text-gray-400">
+              <p>Select an outcome to begin trading.</p>
+            </div>
+          )}
         </div>
       </div>
     </main>
@@ -778,7 +869,8 @@ function ConnectWalletPrompt({ onConnect }) {
 }
 
 // --- UPDATED: PositionRow Component ---
-function PositionRow({ position, onClosePosition }) { // Added onClosePosition prop
+// Now includes the outcome name
+function PositionRow({ position, onClosePosition }) { 
   const sideClass = position.side === 'YES'
     ? 'text-green-400 bg-green-500/10'
     : 'text-red-400 bg-red-500/10';
@@ -787,7 +879,10 @@ function PositionRow({ position, onClosePosition }) { // Added onClosePosition p
 
   return (
     <tr className="hover:bg-gray-900/40 transition-colors">
-      <td className="px-4 py-4 text-sm text-white max-w-xs truncate">{position.title}</td>
+      <td className="px-4 py-4 text-sm text-white max-w-xs truncate">
+        {position.title}
+        <span className="block text-xs text-gray-400">Outcome: {position.outcomeName}</span>
+      </td>
       <td className="px-4 py-4 text-sm">
         <span className={`font-medium px-2 py-0.5 rounded-full text-xs ${sideClass}`}>
           {position.side}
@@ -822,7 +917,10 @@ function OpenOrderRow({ order, onCancel }) {
 
   return (
     <tr className="hover:bg-gray-900/40 transition-colors">
-      <td className="px-4 py-4 text-sm text-white max-w-xs truncate">{order.marketTitle}</td>
+      <td className="px-4 py-4 text-sm text-white max-w-xs truncate">
+        {order.marketTitle}
+        <span className="block text-xs text-gray-400">Outcome: {order.outcomeName}</span>
+      </td>
       <td className="px-4 py-4 text-sm text-gray-400">
         <img
           src={logoUrl}
@@ -1311,10 +1409,13 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
   const [limitPrice, setLimitPrice] = useState('');
   const [limitShares, setLimitShares] = useState('');
 
+  // --- UPDATED: Find the specific outcome to get its price ---
+  const outcome = market?.outcomes.find(o => o.name === position?.outcomeName);
+  
   // Determine the "sell" price (the price of the opposite side)
-  const marketSellPrice = (market && position)
-    ? (position.side === 'YES' ? market.no : market.yes)
-    : 0;
+  const marketSellPrice = (outcome && position)
+    ? (position.side === 'YES' ? (1 - outcome.price) : outcome.price) // This is tricky. If you buy YES at 0.60, you sell at 0.40 (1 - 0.60) NO price. This assumes binary.
+    : 0; // Fallback
 
   useEffect(() => {
     if (position) {
@@ -1324,7 +1425,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
     }
   }, [position, marketSellPrice]);
 
-  if (!isOpen || !position || !market) return null;
+  if (!isOpen || !position || !market || !outcome) return null;
 
   const estimatedProceeds = position.shares * marketSellPrice;
   const limitProceeds = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
@@ -1348,6 +1449,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
   };
   
   const isLimitSubmitDisabled = !limitPrice || parseFloat(limitPrice) <= 0 || !limitShares || parseFloat(limitShares) <= 0;
+  // This logic is for closing, so we are selling the *opposite* of what we bought
   const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
   const sideColor = oppositeSide === 'YES' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700';
 
@@ -1361,7 +1463,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
           <XIcon />
         </button>
         <h2 className="text-2xl font-bold text-white mb-2">Close Position</h2>
-        <p className="text-sm text-gray-400 mb-6 truncate">Selling {position.shares.toFixed(2)} shares of "{position.title}"</p>
+        <p className="text-sm text-gray-400 mb-6 truncate">Selling {position.shares.toFixed(2)} shares of "{position.outcomeName}"</p>
 
         <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
           <button
@@ -1441,8 +1543,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
             (closeType === 'Limit' && isLimitSubmitDisabled)
               ? 'bg-gray-700 cursor-not-allowed'
               : sideColor
-            }
-          `}
+          }`}
         >
           {closeType === 'Market' ? `Market Sell ${oppositeSide}` : `Place Limit Sell ${oppositeSide} Order`}
         </button>
@@ -1564,13 +1665,17 @@ function TickerTape({ newsItems }) {
 }
 
 /**
- * MarketCard Component
- * Displays a single market in the list.
+ * --- *** UPDATED: MarketCard Component *** ---
+ * Displays a market, now showing the top 2 outcomes.
  */
 function MarketCard({ market, onMarketClick }) {
-  // Use safe checks for market price data
-  const yesPrice = Math.floor((market.yes || 0.5) * 100);
-  const noPrice = 100 - yesPrice;
+  
+  // Get the top 2 outcomes (they are pre-sorted by the backend)
+  const topOutcome = market.outcomes[0] || { name: 'N/A', price: 0 };
+  const secondOutcome = market.outcomes[1] || { name: 'N/A', price: 0 };
+
+  // Check if it's a simple Yes/No market
+  const isBinary = topOutcome.name === 'Yes' && secondOutcome.name === 'No';
 
   return (
     <div
@@ -1586,21 +1691,41 @@ function MarketCard({ market, onMarketClick }) {
           style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
         />
       </div>
-      {/* Ensure volume_24h is displayed if available for context */}
       <div className="text-xs text-gray-500 mb-1">
         Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
       </div>
-      {/* --- UPDATED TO USE shortTitle --- */}
+      
+      {/* --- UPDATED: Title --- */}
       <h3 className="text-lg font-semibold text-white mb-4 h-20">{market.shortTitle || market.title}</h3>
+      
+      {/* --- UPDATED: Price Display --- */}
       <div className="flex items-center justify-between space-x-4">
         <div className="flex items-center space-x-2">
-          <span className="text-3xl font-bold text-green-400">{yesPrice}¢</span>
-          <span className="text-sm text-gray-400">YES</span>
+          <span className="text-3xl font-bold text-blue-400">
+            {(topOutcome.price * 100).toFixed(0)}¢
+          </span>
+          <span className="text-sm text-gray-400 truncate max-w-[80px]">{topOutcome.name}</span>
         </div>
-        <div className="flex items-center space-x-2">
-          <span className="text-3xl font-bold text-red-400">{noPrice}¢</span>
-          <span className="text-sm text-gray-400">NO</span>
-        </div>
+        
+        {/* Only show the second outcome if it's not a simple Yes/No */}
+        {!isBinary && (
+          <div className="flex items-center space-x-2">
+            <span className="text-3xl font-bold text-gray-500">
+              {(secondOutcome.price * 100).toFixed(0)}¢
+            </span>
+            <span className="text-sm text-gray-400 truncate max-w-[80px]">{secondOutcome.name}</span>
+          </div>
+        )}
+        
+        {/* Special case for Yes/No, show the "No" price */}
+        {isBinary && (
+           <div className="flex items-center space-x-2">
+            <span className="text-3xl font-bold text-red-400">
+              {(secondOutcome.price * 100).toFixed(0)}¢
+            </span>
+            <span className="text-sm text-gray-400">{secondOutcome.name}</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1618,7 +1743,7 @@ function MarketListPage({ markets, onMarketClick }) {
 
   // Filter based on search and category
   const filteredMarkets = markets
-    .filter(m => activeCategory === 'All' || m.category === activeCategory)
+    .filter(m => activeCategory === 'All' || m.category === activeCategori)
     .filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
@@ -1682,7 +1807,10 @@ export default function App() {
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('markets'); // 'markets', 'portfolio', etc.
-  const [selectedMarket, setSelectedMarket] = useState(null); // For detail page
+  
+  // --- UPDATED: State for Trading ---
+  const [selectedMarket, setSelectedMarket] = useState(null); // The whole market object
+  const [selectedOutcome, setSelectedOutcome] = useState(null); // The specific outcome (e.g., "Andrew Cuomo")
   const [tradeSide, setTradeSide] = useState('YES'); // 'YES' or 'NO'
 
   // Wallet & Portfolio State
@@ -1742,12 +1870,20 @@ export default function App() {
     const priceInterval = setInterval(() => {
       setMarkets(prevMarkets =>
         prevMarkets.map(m => {
-          // Skip if price data is missing (e.g., if API fetch was incomplete)
-          if (typeof m.yes !== 'number' || typeof m.no !== 'number') return m;
+          // Create a copy of outcomes to avoid direct mutation
+          const newOutcomes = m.outcomes.map(o => {
+            // Skip if price data is missing
+            if (typeof o.price !== 'number') return o;
+            
+            const change = (Math.random() - 0.5) * 0.02; // Small random change
+            let newPrice = Math.max(0.01, Math.min(0.99, o.price + change));
+            return { ...o, price: newPrice };
+          });
+          
+          // Re-sort outcomes by new price
+          newOutcomes.sort((a, b) => b.price - a.price);
 
-          const change = (Math.random() - 0.5) * 0.02; // Small random change
-          const newYes = Math.max(0.01, Math.min(0.99, m.yes + change));
-          return { ...m, yes: newYes, no: 1 - newYes };
+          return { ...m, outcomes: newOutcomes };
         })
       );
     }, 3000); // Update prices every 3 seconds
@@ -1765,9 +1901,13 @@ export default function App() {
     setPositions(prevPositions =>
       prevPositions.map(pos => {
         const market = markets.find(m => m.id === pos.marketId);
-        if (!market || typeof market.yes !== 'number' || typeof market.no !== 'number') return pos; // Market data might not be loaded yet
+        // Find the specific outcome within that market
+        const outcome = market?.outcomes.find(o => o.name === pos.outcomeName);
+        
+        if (!market || !outcome) return pos; // Market or outcome data not loaded
 
-        const currentPrice = pos.side === 'YES' ? market.yes : market.no;
+        // Get the current price for this specific outcome
+        const currentPrice = pos.side === 'YES' ? outcome.price : (1 - outcome.price);
         const newValue = pos.shares * currentPrice;
         const newPnl = newValue - (pos.shares * pos.avgPrice);
         
@@ -1816,6 +1956,7 @@ export default function App() {
   const handleNavClick = (page) => {
     setCurrentPage(page);
     setSelectedMarket(null); // Clear market selection on nav
+    setSelectedOutcome(null); // Clear outcome selection on nav
   };
 
   const handleConnectWallet = () => {
@@ -1880,13 +2021,25 @@ export default function App() {
 
   const handleMarketClick = (market) => {
     setSelectedMarket(market);
-    setTradeSide('YES'); // Default to YES
+    setSelectedOutcome(null); // Clear outcome, force user to select one
     setCurrentPage('marketDetail');
   };
 
   const handleBackToMarkets = () => {
     setSelectedMarket(null);
+    setSelectedOutcome(null);
     setCurrentPage('markets');
+  };
+
+  // --- NEW: Handler for selecting an outcome to trade ---
+  const handleSelectOutcome = (outcome, side) => {
+    setSelectedOutcome(outcome);
+    setTradeSide(side);
+  };
+  
+  // --- NEW: Handler to close the trade panel ---
+  const handleCloseTradePanel = () => {
+    setSelectedOutcome(null);
   };
 
   const handleCreateSmartWallet = () => {
@@ -1904,9 +2057,8 @@ export default function App() {
     setCurrentPage('portfolio');
   }
 
+  // --- UPDATED: handleTradeSubmit (Now uses selectedOutcome) ---
   const handleTradeSubmit = (tradeDetails) => {
-    // This remains simulated for now, as it's complex.
-    // A real implementation would call our smart wallet, not just USDC.
     
     const { tradeType, amount, shares, limitPrice } = tradeDetails;
 
@@ -1919,7 +2071,10 @@ export default function App() {
     if (tradeType === 'Market') {
       // Add or update position
       setPositions(prev => {
-        const existingIndex = prev.findIndex(p => p.marketId === selectedMarket.id && p.side === tradeSide);
+        const existingIndex = prev.findIndex(
+          p => p.marketId === selectedMarket.id && p.outcomeName === selectedOutcome.name && p.side === tradeSide
+        );
+        
         if (existingIndex > -1) {
           // Update existing position
           const existing = prev[existingIndex];
@@ -1934,16 +2089,17 @@ export default function App() {
             id: generateUniqueId(),
             marketId: selectedMarket.id,
             title: selectedMarket.title,
+            outcomeName: selectedOutcome.name, // <-- NEW
             side: tradeSide,
             shares: shares,
-            avgPrice: tradeSide === 'YES' ? selectedMarket.yes : selectedMarket.no,
+            avgPrice: (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price),
             currentValue: amount,
             pnl: 0
           };
           return [...prev, newPos];
         }
       });
-      handleAddNotification(`Market ${tradeSide} order for ${shares.toFixed(2)} shares filled.`);
+      handleAddNotification(`Market ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} filled.`);
       setToastMessage("Market Order Filled!");
     } else {
       // Add a new limit order
@@ -1952,13 +2108,14 @@ export default function App() {
         marketId: selectedMarket.id,
         marketTitle: selectedMarket.title,
         platform: selectedMarket.platform,
+        outcomeName: selectedOutcome.name, // <-- NEW
         side: tradeSide,
         price: limitPrice,
         shares: shares,
         cost: amount
       };
       setOpenOrders(prev => [newOrder, ...prev]);
-      handleAddNotification(`Limit ${tradeSide} order for ${shares.toFixed(2)} shares placed.`);
+      handleAddNotification(`Limit ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} placed.`);
       setToastMessage("Limit Order Placed!");
     }
   };
@@ -2109,25 +2266,25 @@ export default function App() {
 
   // --- UPDATED: handleConfirmClosePosition (Simulated) ---
   const handleConfirmClosePosition = (details) => {
-    // This also remains simulated. A real close would trigger a swap
-    // on Polymarket/Kalshi via our backend or smart contract.
     
     const { position, closeType, shares, price } = details;
     
     const market = markets.find(m => m.id === position.marketId);
-    if (!market) {
-      setToastMessage("Error closing position: Market not found.");
+    const outcome = market?.outcomes.find(o => o.name === position.outcomeName);
+
+    if (!market || !outcome) {
+      setToastMessage("Error closing position: Market/Outcome not found.");
       return;
     }
 
-    const marketSellPrice = position.side === 'YES' ? market.no : market.yes; // Sell price is the opposite side
+    const marketSellPrice = position.side === 'YES' ? (1 - outcome.price) : outcome.price;
     
     if (closeType === 'Market') {
       const proceeds = position.shares * marketSellPrice;
       setPortfolioBalance(prev => ({ ...prev, totalUSDC: prev.totalUSDC + proceeds }));
       setPositions(prev => prev.filter(p => p.id !== position.id)); // Remove position
       setToastMessage(`Market close executed! (Simulated)`);
-      handleAddNotification(`Sold ${position.shares.toFixed(2)} shares of "${position.title}". (Simulated)`);
+      handleAddNotification(`Sold ${position.shares.toFixed(2)} shares of "${position.outcomeName}". (Simulated)`);
     } else {
       // Limit Close: Add a new limit order for the *opposite* side.
       const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
@@ -2136,6 +2293,7 @@ export default function App() {
           marketId: position.marketId,
           marketTitle: position.title,
           platform: market.platform,
+          outcomeName: position.outcomeName, // <-- NEW
           side: oppositeSide,
           price: price,
           shares: shares,
@@ -2162,12 +2320,14 @@ export default function App() {
             onSubmit={handleTradeSubmit}
             userAddress={userAddress}
             onConnectWallet={handleConnectWallet}
-            onSideChange={setTradeSide}
-            tradeSide={tradeSide}
-            // --- FIX: Pass state down for validation ---
             setToastMessage={setToastMessage}
             handleAddNotification={handleAddNotification}
             portfolioBalance={portfolioBalance}
+            // --- NEW Props for multi-outcome ---
+            selectedOutcome={selectedOutcome}
+            onSelectOutcome={handleSelectOutcome}
+            tradeSide={tradeSide}
+            onCloseTradePanel={handleCloseTradePanel}
           />
         );
       case 'portfolio':
@@ -2184,16 +2344,16 @@ export default function App() {
             positions={positions}
             openOrders={openOrders}
             onCancelOrder={handleCancelOrder}
-            onDeposit={handleOpenDepositModal}      // <-- UPDATED
-            onWithdraw={handleOpenWithdrawModal}    // <-- UPDATED
+            onDeposit={handleOpenDepositModal}
+            onWithdraw={handleOpenWithdrawModal}
             onLinkAccounts={handleLinkAccounts}
-            onClosePosition={handleOpenClosePositionModal} // <-- NEW
+            onClosePosition={handleOpenClosePositionModal}
           />
         );
       case 'linkAccounts':
           return <LinkAccountsPage onBack={handleBackToPortfolio} />
       case 'leaderboard':
-        return <LeaderboardPage leaderboardData={leaderboardData} />; // <-- UPDATED: Pass prop
+        return <LeaderboardPage leaderboardData={leaderboardData} />;
       case 'referrals':
         return <ReferralsPage />;
       default:
