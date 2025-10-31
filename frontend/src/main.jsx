@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css'; // <-- ADDED THIS LINE
 // Attempting a different import path. It's possible the file is named 'App.jsx' (uppercase A)
 import App from './app.jsx'; 
 
