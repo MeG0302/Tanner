@@ -1,58 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tanner.xyz Aggregator</title>
-    
-    <!-- Required for all Web3 functionality (connecting wallet, sending transactions). -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-            },
-            animation: {
-              marquee: 'marquee 60s linear infinite',
-            },
-            keyframes: {
-              marquee: {
-                '0%': { transform: 'translateX(0%)' },
-                '100%': { transform: 'translateX(-50%)' },
-              },
-            },
-          },
-        },
-      };
-    </script>
-    
-    <!-- Google Font: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
-    
-    <style>
-      /* Fix for number input arrows in Chrome/Safari */
-      input[type=number]::-webkit-inner-spin-button,
-      input[type=number]::-webkit-outer-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-      }
-      /* Fix for number input arrows in Firefox */
-      input[type=number] {
-        -moz-appearance: textfield;
-      }
-    </style>
-</head>
+<!-- ... existing code ... -->
 <body class="bg-black">
-    <!-- Your React app (app.jsx) will be injected into this div -->
-    <div id="root"></div>
-    <!-- CRITICAL FIX: The filename must be all lowercase: app.jsx -->
-    <script type="module" src="/src/app.jsx"></script>
+    <!-- Your React app (app.jsx) will be injected into this div -->
+    <div id="root"></div>
+    <!-- CRITICAL FIX: Point to the main.jsx entry script -->
+    <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
