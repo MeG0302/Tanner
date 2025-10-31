@@ -24,187 +24,50 @@ function generateUniqueId() {
     (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
   );
 }
-// --- FIX: Removed extra closing brace that caused the error ---
 
 // --- API LOGIC (Moved from api.js) ---
-
-// --- NEW: Live Data Fetching Functions ---
-
-/**
- * Fetches and processes the top 25 markets from Polymarket.
- */
-async function fetchPolymarketData() {
-  try {
-    // Note: Using gamma-api as it's simpler. CLOB API is an option but more complex.
-    // We fetch 100 and sort by volume in memory.
-    const response = await fetch('https://gamma-api.polymarket.com/markets?limit=100');
-    if (!response.ok) throw new Error(`Polymarket API error: ${response.status}`);
-    
-    const data = await response.json();
-    
-    // Check if data is in the expected format
-    if (!data || !Array.isArray(data.data)) {
-        console.error("Polymarket data in unexpected format:", data);
-        return [];
-    }
-
-    // Sort by 24h volume (assuming `volume_24h` field)
-    const sorted = data.data.sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0));
-
-    // Map to our internal format
-    return sorted.slice(0, 25).map(market => ({
-      id: market.id,
-      category: market.category,
-      title: market.question,
-      platform: 'Polymarket',
-      yes: market.price, // 'price' is the 'yes' price
-      no: 1 - market.price,
-    }));
-  } catch (error) {
-    console.error("Failed to fetch Polymarket data:", error);
-    return []; // Return empty array on failure
-  }
-}
-
-/**
- * Fetches and processes the top 25 markets from Kalshi.
- */
-async function fetchKalshiData() {
-  try {
-    // Kalshi requires two endpoints: one for market info (titles) and one for live data (prices/volume)
-    const marketsPromise = fetch('https://api.elections.kalshi.com/trade-api/v2/markets?status=open&limit=500');
-    const liveDataPromise = fetch('https://api.elections.kalshi.com/trade-api/v2/live-data');
-
-    const [marketsRes, liveDataRes] = await Promise.all([marketsPromise, liveDataPromise]);
-
-    if (!marketsRes.ok) throw new Error(`Kalshi markets API error: ${marketsRes.status}`);
-    if (!liveDataRes.ok) throw new Error(`Kalshi livedata API error: ${liveDataRes.status}`);
-
-    const marketsData = await marketsRes.json();
-    const liveData = await liveDataRes.json();
-
-    // Create a map of market info for easy lookup
-    const marketInfoMap = new Map(
-      marketsData.markets.map(m => [m.ticker, { title: m.title, category: m.category }])
-    );
-
-    // Convert live data object to an array and combine with market info
-    const liveDataArray = Object.values(liveData.markets);
-    const combined = liveDataArray
-      .map(live => {
-        const info = marketInfoMap.get(live.market_ticker);
-        return info ? { ...live, ...info } : null;
-      })
-      .filter(m => m !== null && m.title && m.volume_24h > 0); // Only include markets we have info for and have volume
-
-    // Sort by 24h volume
-    const sorted = combined.sort((a, b) => b.volume_24h - a.volume_24h);
-
-    // Map to our internal format
-    return sorted.slice(0, 25).map(market => ({
-      id: market.market_ticker,
-      category: market.category || 'Other',
-      title: market.title,
-      platform: 'Kalshi',
-      yes: market.last_price,
-      no: 1 - market.last_price,
-    }));
-  } catch (error) {
-    console.error("Failed to fetch Kalshi data:", error);
-    return []; // Return empty array on failure
-  }
-}
-
-/**
- * Fetches and processes the top 25 markets from Limitless.
- * Note: This is a best-guess implementation based on the URL.
- */
-async function fetchLimitlessData() {
-  try {
-    // This is a guess based on the provided base URL.
-    const response = await fetch('https://api.limitless.exchange/api-v1/markets'); 
-    if (!response.ok) throw new Error(`Limitless API error: ${response.status}`);
-    
-    const data = await response.json(); // Assuming this is an array of markets
-
-    // Assuming the data structure and sorting fields
-    // This will likely need adjustment based on the actual API response
-    const sorted = data.sort((a, b) => (b.volume_24h || 0) - (a.volume_24h || 0));
-
-    return sorted.slice(0, 25).map(market => ({
-      id: market.id,
-      category: market.category || 'Other',
-      title: market.name || market.title, // Guessing field names
-      platform: 'Limitless',
-      yes: market.price, // Guessing field names
-      no: 1 - market.price,
-    }));
-  } catch (error) {
-    console.error("Failed to fetch Limitless data:", error);
-    // If this fails, it's likely due to the endpoint/data structure guess being wrong.
-    return []; // Return empty array on failure
-  }
-}
-
-
-/**
- * Main API function to fetch markets from all platforms.
- * Replaces the old mock data function.
- */
+// --- FIX: Reverted to fetch from YOUR backend. ---
+// The browser CANNOT call Polymarket/Kalshi APIs directly due to CORS policy.
+// Your backend server (at 92.246.141.205:3001) must fetch the data.
 export const fetchMarkets = async (setToastMessage) => {
-  console.log("Attempting to fetch LIVE markets from all platforms...");
+  console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  const [polymarket, kalshi, limitless] = await Promise.allSettled([
-    fetchPolymarketData(),
-    fetchKalshiData(),
-    fetchLimitlessData(),
-  ]);
-
-  let allMarkets = [];
-  let fetchedCount = 0;
-
-  if (polymarket.status === 'fulfilled') {
-    allMarkets = allMarkets.concat(polymarket.value);
-    fetchedCount += polymarket.value.length;
-  } else {
-    console.error("Polymarket fetch failed:", polymarket.reason);
-  }
-
-  if (kalshi.status === 'fulfilled') {
-    allMarkets = allMarkets.concat(kalshi.value);
-    fetchedCount += kalshi.value.length;
-  } else {
-    console.error("Kalshi fetch failed:", kalshi.reason);
-  }
+  // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
+  // --- FIX: Reverted to absolute URL for the VPS backend ---
+  const API_URL = 'http://92.246.141.205:3001/api/markets';
   
-  if (limitless.status === 'fulfilled') {
-    allMarkets = allMarkets.concat(limitless.value);
-    fetchedCount += limitless.value.length;
-  } else {
-    console.error("Limitless fetch failed:", limitless.reason);
-  }
+  // Added a brief delay to prevent spamming failed requests
+  await new Promise(resolve => setTimeout(resolve, 500));
 
-  console.log(`Successfully fetched ${fetchedCount} total markets.`);
-
-  if (allMarkets.length === 0) {
-    // If all fetches failed, fall back to mock data
-    console.error("All API fetches failed. Using mock data as fallback.");
-    if (setToastMessage) {
-      setToastMessage("Server Error: Cannot connect to exchanges. Showing simulation.");
+  try {
+    const response = await fetch(API_URL);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    const data = await response.json();
+    console.log("Successfully fetched LIVE data:", data);
+    return data;
+  } catch (error) {
+    console.error("Failed to fetch LIVE markets from backend. Using mock data as fallback:", error);
+    
+    // Check if setToastMessage exists before calling it
+    if (setToastMessage) {
+        setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
+    }
+    
+    // Fallback to mock data (since we are in a limited environment)
     const mockData = [
-       { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
-       { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
-       { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
-       { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
-       { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
-       { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
     ];
     return mockData;
   }
-
-  return allMarkets;
 };
+
 
 // --- Mock Portfolio Data (for initial state) ---
 const initialPositions = [
@@ -266,14 +129,15 @@ const mockReferralData = {
 
 
 // --- Helper function for logos (Corrected order) ---
+// --- FIX: Using placeholders as the images are not in your public folder ---
 const getLogo = (platform) => {
   switch (platform) {
     case 'Limitless':
-      return "fLHeW0Ji_400x400.jpg"; // Image 1 (Limitless)
+      return "https://placehold.co/24x24/1E1E1E/FFFFFF?text=L"; // Image 1 (Limitless)
     case 'Polymarket':
-      return "mqiIx1cj_400x400.jpg"; // Image 2 (Polymarket)
+      return "https://placehold.co/24x24/3366FF/FFFFFF?text=P"; // Image 2 (Polymarket)
     case 'Kalshi':
-      return "1qzNBZII_400x400.jpg"; // Image 3 (Kalshi)
+      return "https://placehold.co/24x24/FFFFFF/000000?text=K"; // Image 3 (Kalshi)
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
