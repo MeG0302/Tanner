@@ -1,13 +1,15 @@
+/**
+ * Tanner.xyz App
+ * Aggregated Prediction Market Frontend
+ */
 import React, { useState, useEffect } from 'react';
 
 // --- NEW: Web3 Constants (NEEDS TO BE REPLACED) ---
 // This is the address for USDC on the Sepolia testnet.
-// You can find these on block explorers.
 const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Example: Sepolia USDC
 const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // <-- UPDATED with your deployed contract!
 
 // This is the minimal ABI (Application Binary Interface) for a token
-// It tells ethers.js how to call the 'approve' and 'transfer' functions
 const USDC_ABI = [
   "function approve(address spender, uint256 amount) returns (bool)",
   "function transfer(address to, uint256 amount) returns (bool)",
@@ -17,23 +19,21 @@ const USDC_ABI = [
 ];
 
 // --- NEW: Universal Unique ID Generator ---
-// This function replaces 'crypto.randomUUID()' to ensure compatibility
-// with all browsers and non-secure (http://) contexts.
 function generateUniqueId() {
-  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
     (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
   );
 }
 
 
 // --- API LOGIC ---
-// This function now calls YOUR backend, not the external APIs.
+// This function must call your backend server, which acts as the API aggregator.
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // !!! CRITICAL: This URL points to YOUR backend server (server.js) !!!
+  // !!! CRITICAL: This MUST point to your running backend server !!!
   const API_URL = 'http://92.246.141.205:3001/api/markets';
-  
+
   // Added a brief delay to prevent spamming failed requests
   await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -43,33 +43,36 @@ export const fetchMarkets = async (setToastMessage) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    console.log("Successfully fetched LIVE data:", data);
+    console.log(`Successfully fetched LIVE data: (${data.length})`, data);
     return data;
   } catch (error) {
-    // This console.error is critical for debugging
-    console.error("------------------------------------------------");
-    console.error(`BACKEND FETCH FAILED: ${error.message}`);
-    console.error("This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at:", API_URL);
-    console.error("Possible Causes:");
-    console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
-    console.error("2. A firewall on your server is blocking port 3001.");
-    console.error("3. The API_URL constant in app.jsx is incorrect.");
-    console.error("Falling back to mock data as a temporary measure.");
-    console.error("------------------------------------------------");
-
+    // --- START ERROR LOGGING BLOCK ---
+    console.log("------------------------------------------------");
+    console.error("BACKEND FETCH FAILED: Failed to fetch", error);
+    if (error.message.includes('Failed to fetch')) {
+        console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${API_URL}`);
+        console.error("Possible Causes:");
+        console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
+        console.error("2. A firewall on your server is blocking port 3001.");
+        console.error("3. The API_URL constant in app.jsx is incorrect.");
+        console.error("Falling back to mock data as a temporary measure.");
+    }
+    console.log("------------------------------------------------");
+    // --- END ERROR LOGGING BLOCK ---
+    
     // Check if setToastMessage exists before calling it
     if (setToastMessage) {
-        setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
+      setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
     }
-    
+
     // Fallback to mock data (since we are in a limited environment)
     const mockData = [
-      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
-      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
-      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
-      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
-      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
-      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000 },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000 },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000 },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000 },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000 },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000 },
     ];
     return mockData;
   }
@@ -134,23 +137,18 @@ const mockReferralData = {
 };
 
 
-// --- Helper function for logos (Corrected order) ---
-// --- FIX: Using placeholders to avoid 404 errors from missing images ---
+// --- Helper function for logos (Using placeholders now) ---
 const getLogo = (platform) => {
-  const size = "24x24";
-  const colors = "808080/FFFFFF"; // gray bg, white text
   switch (platform) {
     case 'Limitless':
-      // return "fLHeW0Ji_400x400.jpg"; // Image 1 (Limitless)
-      return `https://placehold.co/${size}/${colors}?text=L`;
+      return "https://placehold.co/24x24/1D2C59/FFFFFF?text=L";
     case 'Polymarket':
-      // return "mqiIx1cj_400x400.jpg"; // Image 2 (Polymarket)
-      return `https://placehold.co/${size}/${colors}?text=P`;
+      return "https://placehold.co/24x24/1E90FF/FFFFFF?text=P";
     case 'Kalshi':
-      // return "1qzNBZII_400x400.jpg"; // Image 3 (Kalshi)
-      return `https://placehold.co/${size}/${colors}?text=K`;
+      // Kalshi logo needs a white background for visibility
+      return "https://placehold.co/24x24/FFFFFF/000000?text=K"; 
     default:
-      return `https://placehold.co/${size}/${colors}?text=?`;
+      return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
 };
 
@@ -174,15 +172,12 @@ const generateChartData = () => {
 const fetchChartData = (marketId, platform) => {
     console.log(`Simulating fetch for ${platform} chart data (Market ID: ${marketId})...`);
     return new Promise(resolve => {
-        setTimeout(() => {
-            const chartData = generateChartData(platform);
-            resolve(chartData);
-        }, 1200); // Simulated network delay
+      setTimeout(() => {
+        const chartData = generateChartData(platform);
+        resolve(chartData);
+      }, 1200); // Simulated network delay
     });
 };
-
-
-// --- END OF API LOGIC ---
 
 
 // --- SVG Icon Components ---
@@ -271,7 +266,7 @@ const MetamaskIcon = () => (
 
 const OKXIcon = () => (
   <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22.288 14.43v-4.86L16.8 4.08h-4.86l-2.71 2.71v.006H4.37v4.86l5.49 5.49h4.86l2.71-2.71V14.43h4.858zm-4.86-2.43h-2.43v-2.43h2.43v2.43zm-4.86-4.86h-2.43V4.71h2.43v2.43zm-2.43 4.86H7.71v-2.43h2.43v2.43zm2.43 4.86h2.43v2.43h-2.43v-2.43zm2.43-2.43v2.43h2.43v-2.43h-2.43zm4.86 4.86h-2.43v2.43h2.43v-2.43zm-2.43-4.86H16.8v-2.43h-2.43v2.43zm-4.86 2.43v-2.43H7.71v2.43h2.43zm4.86 0h2.43v2.43h-2.43v-2.43zM12.54 9.57H9.57V7.14h2.97v2.43zm2.43 0h2.43v2.43h-2.43V9.57zM9.57 12h2.97v2.43H9.57V12zm4.86 0v2.43h-2.43V12h2.43zM1.71 9.57h2.43v4.86H1.71V9.57zm18.15 0h2.43v4.86h-2.43V9.57zM7.14 1.71h4.86v2.43H7.14V1.71zm9.72 0h-2.43v2.43h2.43V1.71zm-4.86 18.15h-4.86v2.43h4.86v-2.43z"/>
+    <path d="M22.288 14.43v-4.86L16.8 4.08h-4.86l-2.71 2.71v.006H4.37v4.86l5.49 5.49h4.86l2.71-2.71V14.43h4.858zm-4.86-2.43h-2.43v-2.43h2.43v2.43zm-4.86-4.86h-2.43V4.71h2.43v2.43zm-2.43 4.86H7.71v-2.43h2.43v2.43zm2.43 4.86h2.43v2.43h-2.43v-2.43zm2.43-2.43v2.43h-2.43v-2.43h-2.43zm4.86 4.86h-2.43v2.43h2.43v-2.43zm-2.43-4.86H16.8v-2.43h-2.43v2.43zm-4.86 2.43v-2.43H7.71v2.43h2.43zm4.86 0h2.43v2.43h-2.43v-2.43zM12.54 9.57H9.57V7.14h2.97v2.43zm2.43 0h2.43v2.43h-2.43V9.57zM9.57 12h2.97v2.43H9.57V12zm4.86 0v2.43h-2.43V12h2.43zM1.71 9.57h2.43v4.86H1.71V9.57zm18.15 0h2.43v4.86h-2.43V9.57zM7.14 1.71h4.86v2.43H7.14V1.71zm9.72 0h-2.43v2.43h2.43V1.71zm-4.86 18.15h-4.86v2.43h4.86v-2.43z"/>
   </svg>
 );
 
@@ -332,7 +327,7 @@ function SimulatedPriceChart({ data }) {
 
 // --- Simulated Order Book Component ---
 function SimulatedOrderBook({ onPriceClick }) {
-  const {bids, asks} = mockOrderBook;
+  const { bids, asks } = mockOrderBook;
 
   return (
     <div className="mt-1 bg-gray-800 rounded-lg border border-gray-700 h-72 overflow-hidden text-sm">
@@ -403,7 +398,6 @@ function SimulatedOrderBook({ onPriceClick }) {
 
 
 // --- RENAMED: TradePanel Component (was TradeConfirmModal) ---
-// --- FIX: Added missing props for validation ---
 function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
   const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
@@ -411,35 +405,40 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   const [limitShares, setLimitShares] = useState('');  // Amount in Shares for Limit
 
   useEffect(() => {
-      setTradeType('Market');
-      setMarketAmount('');
-      // --- FIX: Add check for market existence ---
-      if (market) {
-        setLimitPrice(side === 'YES' ? market.yes.toFixed(2) : market.no.toFixed(2)); // Pre-fill limit price
-      }
-      setLimitShares('');
+    setTradeType('Market');
+    setMarketAmount('');
+    // --- FIX: Add check for market existence ---
+    if (market && typeof market.yes === 'number' && typeof market.no === 'number') {
+      setLimitPrice(side === 'YES' ? market.yes.toFixed(2) : market.no.toFixed(2)); // Pre-fill limit price
+    } else {
+      setLimitPrice('0.00');
+    }
+    setLimitShares('');
   }, [market, side]); // Reset when market or side changes
 
+  // Safely access prices, defaulting to 0.50 if not available
+  const marketPrice = (market && typeof market.yes === 'number' && typeof market.no === 'number') 
+    ? (side === 'YES' ? market.yes : market.no) 
+    : 0.50;
+    
   if (!market) return null;
 
-  const marketPrice = side === 'YES' ? market.yes : market.no;
+
   const marketPayout = (marketAmount > 0 && marketPrice > 0) ? (marketAmount / marketPrice).toFixed(2) : 0;
   const limitCost = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
 
   const handleSubmit = () => {
     if (!userAddress) {
-        setToastMessage("Please connect wallet first.");
-        return;
+      setToastMessage("Please connect wallet first.");
+      return;
     }
     
     // Check if ethers.js is loaded for real trade execution
     if (typeof window.ethers === 'undefined') {
-        setToastMessage("Web3 library not loaded. Cannot process trade.");
-        return;
+      setToastMessage("Web3 library not loaded. Cannot process trade.");
+      return;
     }
 
-    // --- FIX: This is where the simulation logic was, it needs to call onSubmit
-    // We package up the trade details for the main App component's 'handleTradeSubmit'
     let tradeDetails = {};
     if (tradeType === 'Market') {
       tradeDetails = {
@@ -459,9 +458,9 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
     
     // --- FIX: Validation moved from App.js to TradePanel ---
     if (!portfolioBalance || typeof portfolioBalance.totalUSDC !== 'number') {
-        handleAddNotification("Portfolio balance not loaded.");
-        setToastMessage("Portfolio balance not loaded.");
-        return;
+      handleAddNotification("Portfolio balance not loaded.");
+      setToastMessage("Portfolio balance not loaded.");
+      return;
     }
     if (portfolioBalance.totalUSDC < tradeDetails.amount) {
       handleAddNotification("Trade failed: Insufficient funds.");
@@ -474,10 +473,10 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
     
     // Clear inputs after submission
     if (tradeType === 'Market') {
-        setMarketAmount('');
+      setMarketAmount('');
     } else {
-        setLimitPrice(side === 'YES' ? market?.yes.toFixed(2) : market?.no.toFixed(2));
-        setLimitShares('');
+      setLimitPrice(side === 'YES' ? marketPrice.toFixed(2) : marketPrice.toFixed(2));
+      setLimitShares('');
     }
   };
 
@@ -489,159 +488,158 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   const isLimitSubmitDisabled = !limitPrice || parseFloat(limitPrice) <= 0 || !limitShares || parseFloat(limitShares) <= 0;
 
   return (
-      <div
-        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
-      >
-        {/* --- NEW: YES/NO Side Toggle --- */}
-        <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
-          <button
-            onClick={() => onSideChange('YES')}
-            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'YES' ? 'bg-green-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-          >
-            YES
-          </button>
-          <button
-            onClick={() => onSideChange('NO')}
-            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'NO' ? 'bg-red-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-          >
-            NO
-          </button>
-        </div>
+    <div
+      className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
+    >
+      {/* --- NEW: YES/NO Side Toggle --- */}
+      <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+        <button
+          onClick={() => onSideChange('YES')}
+          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'YES' ? 'bg-green-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+        >
+          YES
+        </button>
+        <button
+          onClick={() => onSideChange('NO')}
+          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'NO' ? 'bg-red-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+        >
+          NO
+        </button>
+      </div>
 
-        <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
-          <button
-            onClick={() => setTradeType('Market')}
-            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-          >
-            Market
-          </button>
-          <button
-            onClick={() => setTradeType('Limit')}
-            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-          >
-            Limit
-          </button>
-        </div>
+      <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+        <button
+          onClick={() => setTradeType('Market')}
+          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+        >
+          Market
+        </button>
+        <button
+          onClick={() => setTradeType('Limit')}
+          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+        >
+          Limit
+        </button>
+      </div>
 
-        {tradeType === 'Market' ? (
-          <div className="w-full space-y-4">
-            <div>
-              <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
+      {tradeType === 'Market' ? (
+        <div className="w-full space-y-4">
+          <div>
+            <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
+            <div className="relative mt-1">
+              <input
+                type="number"
+                value={marketAmount}
+                onChange={(e) => setMarketAmount(e.target.value)}
+                placeholder="0.00"
+                min="0"
+                step="any"
+                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
+            <div className="relative mt-1">
+              <input
+                type="text"
+                value={marketPayout}
+                disabled
+                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
+              />
+              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
+            </div>
+          </div>
+
+          <div className="text-sm text-gray-400 flex justify-between pt-2">
+            <span>Price per Share</span>
+            <span className="text-white font-medium">${marketPrice.toFixed(2)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col space-y-4">
+          <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
+            <div className="w-full md:w-1/2">
+              <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
               <div className="relative mt-1">
                 <input
                   type="number"
-                  value={marketAmount}
-                  onChange={(e) => setMarketAmount(e.target.value)}
+                  value={limitPrice}
+                  onChange={(e) => setLimitPrice(e.target.value)}
                   placeholder="0.00"
                   min="0"
-                  step="any"
-                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  step="0.01"
+                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
               </div>
             </div>
-
-            <div>
-              <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
+            <div className="w-full md:w-1/2">
+              <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
               <div className="relative mt-1">
                 <input
-                  type="text"
-                  value={marketPayout}
-                  disabled
-                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
+                  type="number"
+                  value={limitShares}
+                  onChange={(e) => setLimitShares(e.target.value)}
+                  placeholder="0.0"
+                  min="0"
+                  step="any"
+                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
               </div>
             </div>
-
+          </div>
             <div className="text-sm text-gray-400 flex justify-between pt-2">
-              <span>Price per Share</span>
-              <span className="text-white font-medium">${marketPrice.toFixed(2)}</span>
+              <span>Est. Total Cost</span>
+              <span className="text-white font-medium">${limitCost}</span>
             </div>
-          </div>
-        ) : (
-          <div className="flex flex-col space-y-4">
-            <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
-              <div className="w-full md:w-1/2">
-                <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
-                <div className="relative mt-1">
-                  <input
-                    type="number"
-                    value={limitPrice}
-                    onChange={(e) => setLimitPrice(e.target.value)}
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
-                </div>
-              </div>
-              <div className="w-full md:w-1/2">
-                <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
-                <div className="relative mt-1">
-                  <input
-                    type="number"
-                    value={limitShares}
-                    onChange={(e) => setLimitShares(e.target.value)}
-                    placeholder="0.0"
-                    min="0"
-                    step="any"
-                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                  />
-                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
-                </div>
-              </div>
-            </div>
-             <div className="text-sm text-gray-400 flex justify-between pt-2">
-                <span>Est. Total Cost</span>
-                <span className="text-white font-medium">${limitCost}</span>
-              </div>
-            <div>
-              <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
-              <SimulatedOrderBook onPriceClick={handlePriceClick} />
-            </div>
-          </div>
-        )}
-
-        <div className="text-sm text-gray-400 space-y-2 mt-6">
-          <div className="flex justify-between">
-            <span>Est. Fee</span>
-            <span className="text-white font-medium">$0.15 (Simulated)</span>
+          <div>
+            <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
+            <SimulatedOrderBook onPriceClick={handlePriceClick} />
           </div>
         </div>
+      )}
 
-        {/* --- UPDATED: Connect Wallet / Submit Button --- */}
-        {!userAddress ? (
-          <button
-            onClick={onConnectWallet}
-            className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
-          >
-            Connect Wallet to Trade
-          </button>
-        ) : (
-          <button
-            onClick={handleSubmit}
-            disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
-            className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
-              ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
-                ? 'bg-gray-700 cursor-not-allowed'
-                : (side === 'YES'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700')
-              }
-            `}
-          >
-            {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
-          </button>
-        )}
-
+      <div className="text-sm text-gray-400 space-y-2 mt-6">
+        <div className="flex justify-between">
+          <span>Est. Fee</span>
+          <span className="text-white font-medium">$0.15 (Simulated)</span>
+        </div>
       </div>
+
+      {/* --- UPDATED: Connect Wallet / Submit Button --- */}
+      {!userAddress ? (
+        <button
+          onClick={onConnectWallet}
+          className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
+        >
+          Connect Wallet to Trade
+        </button>
+      ) : (
+        <button
+          onClick={handleSubmit}
+          disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
+          className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
+            ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
+              ? 'bg-gray-700 cursor-not-allowed'
+              : (side === 'YES'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-red-600 hover:bg-red-700')
+            }
+          `}
+        >
+          {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
+        </button>
+      )}
+
+    </div>
   );
 }
 
 // --- NEW: Market Detail Page Component ---
-// --- FIX: Pass new props to TradePanel ---
 function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWallet, onSideChange, tradeSide, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [chartData, setChartData] = useState([]); // Generate mock chart data
 
@@ -654,7 +652,7 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
   if (!market) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-         <p className="text-gray-400">Market data not found.</p>
+          <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
@@ -877,7 +875,6 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
       {/* Open Positions Table */}
       <h2 className="text-2xl font-bold text-white mb-6">Open Positions</h2>
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-        {/* FIX: Removed whitespace causing DOM warning */}
         <table className="w-full table-auto"><thead className="border-b border-gray-800">
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
@@ -907,7 +904,6 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
       {/* --- NEW: Open Limit Orders Table --- */}
       <h2 className="text-2xl font-bold text-white mt-8 mb-4">Open Orders</h2>
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
-        {/* FIX: Removed whitespace causing DOM warning */}
         <table className="w-full table-auto"><thead className="border-b border-gray-800">
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
@@ -1020,13 +1016,14 @@ function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
 
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden max-w-3xl">
         <table className="w-full table-auto">
-          {/* FIX: Removed whitespace causing DOM warning */}
-          <thead className="border-b border-gray-800"><tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">User Address</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total P&L</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total Volume</th>
-          </tr></thead>
+          <thead className="border-b border-gray-800">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">User Address</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total P&L</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total Volume</th>
+            </tr>
+          </thead>
           <tbody className="divide-y divide-gray-800">
             {leaderboardData.map((trader, index) => ( // <-- UPDATED: Use prop
               <tr key={trader.rank} className="hover:bg-gray-900/40 transition-colors">
@@ -1055,16 +1052,16 @@ function ReferralsPage() {
     // In a real environment, this uses the Clipboard API. For simulation:
     // We use document.execCommand('copy') as navigator.clipboard.writeText() is often blocked in iFrames.
     try {
-        const tempElement = document.createElement('textarea');
-        tempElement.value = referralCode;
-        document.body.appendChild(tempElement);
-        tempElement.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempElement);
-        // Alert is replaced with toast in the main App component
-        alert(`Simulated: Copied referral code to clipboard! Code: ${referralCode}`); 
+      const tempElement = document.createElement('textarea');
+      tempElement.value = referralCode;
+      document.body.appendChild(tempElement);
+      tempElement.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempElement);
+      // Alert is replaced with toast in the main App component
+      alert(`Simulated: Copied referral code to clipboard! Code: ${referralCode}`);  
     } catch (err) {
-        alert('Simulated: Could not copy text. Please copy manually.');
+      alert('Simulated: Could not copy text. Please copy manually.');
     }
   };
 
@@ -1174,8 +1171,8 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
 
   const walletOptions = [
     { name: 'Metamask', icon: <MetamaskIcon /> }, // UPDATED
-    { name: 'OKX', icon: <OKXIcon /> },     // UPDATED
-    { name: 'Rabby', icon: <RabbyIcon /> },     // UPDATED (Fixed typo)
+    { name: 'OKX', icon: <OKXIcon /> },      // UPDATED
+    { name: 'Rabby', icon: <RabbyIcon /> },      // UPDATED (Fixed typo)
   ];
 
   return (
@@ -1391,7 +1388,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
                 </div>
               </div>
             </div>
-             <div className="text-sm text-gray-400 flex justify-between pt-2">
+              <div className="text-sm text-gray-400 flex justify-between pt-2">
                 <span>Est. Total Proceeds</span>
                 <span className="text-white font-medium">${limitProceeds}</span>
               </div>
@@ -1531,7 +1528,8 @@ function TickerTape({ newsItems }) {
  * Displays a single market in the list.
  */
 function MarketCard({ market, onMarketClick }) {
-  const yesPrice = Math.floor(market.yes * 100);
+  // Use safe checks for market price data
+  const yesPrice = Math.floor((market.yes || 0.5) * 100);
   const noPrice = 100 - yesPrice;
 
   return (
@@ -1547,6 +1545,10 @@ function MarketCard({ market, onMarketClick }) {
           className="w-6 h-6 rounded-full"
           style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
         />
+      </div>
+      {/* Ensure volume_24h is displayed if available for context */}
+      <div className="text-xs text-gray-500 mb-1">
+        Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
       </div>
       <h3 className="text-lg font-semibold text-white mb-4 h-20">{market.title}</h3>
       <div className="flex items-center justify-between space-x-4">
@@ -1570,8 +1572,9 @@ function MarketCard({ market, onMarketClick }) {
 function MarketListPage({ markets, onMarketClick }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const categories = ['All', 'Politics', 'Crypto', 'Sports', 'Other'];
+  const categories = ['All', 'Politics', 'Crypto', 'Sports', 'Economics', 'Other']; // Added Economics
 
+  // Filter based on search and category
   const filteredMarkets = markets
     .filter(m => activeCategory === 'All' || m.category === activeCategory)
     .filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -1594,12 +1597,12 @@ function MarketListPage({ markets, onMarketClick }) {
             />
           </div>
         </div>
-        <div className="flex space-x-2 bg-gray-800 p-1 rounded-lg">
+        <div className="flex space-x-2 bg-gray-800 p-1 rounded-lg overflow-x-auto">
           {categories.map(cat => (
             <button
               key={cat}
               onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`flex-shrink-0 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                 activeCategory === cat
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:bg-gray-700'
@@ -1612,13 +1615,15 @@ function MarketListPage({ markets, onMarketClick }) {
       </div>
 
       {/* Market Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredMarkets.length > 0 ? (
           filteredMarkets.map(market => (
             <MarketCard key={market.id} market={market} onMarketClick={onMarketClick} />
           ))
         ) : (
-          <p className="text-gray-400 col-span-full text-center">No markets found.</p>
+          <p className="text-gray-400 col-span-full text-center">
+            {markets.length === 0 ? "Loading markets..." : "No markets found matching your criteria."}
+          </p>
         )}
       </div>
     </main>
@@ -1671,10 +1676,18 @@ export default function App() {
       try {
         // Pass setToastMessage to fetchMarkets so it can report errors
         const data = await fetchMarkets(setToastMessage);
-        setMarkets(data);
+        
+        // FIX: Ensure data is an array before setting state
+        if (Array.isArray(data)) {
+            setMarkets(data);
+        } else {
+            console.error("Received non-array data from backend:", data);
+            setMarkets([]);
+        }
       } catch (error) {
         console.error("Failed to fetch markets:", error);
         handleAddNotification("Error fetching markets.", 'error');
+        setMarkets(initialMarkets); // Fallback to mock data if fetch fails completely
       }
       setIsLoading(false);
     };
@@ -1687,6 +1700,9 @@ export default function App() {
     const priceInterval = setInterval(() => {
       setMarkets(prevMarkets =>
         prevMarkets.map(m => {
+          // Skip if price data is missing (e.g., if API fetch was incomplete)
+          if (typeof m.yes !== 'number' || typeof m.no !== 'number') return m;
+
           const change = (Math.random() - 0.5) * 0.02; // Small random change
           const newYes = Math.max(0.01, Math.min(0.99, m.yes + change));
           return { ...m, yes: newYes, no: 1 - newYes };
@@ -1707,7 +1723,7 @@ export default function App() {
     setPositions(prevPositions =>
       prevPositions.map(pos => {
         const market = markets.find(m => m.id === pos.marketId);
-        if (!market) return pos; // Market data might not be loaded yet
+        if (!market || typeof market.yes !== 'number' || typeof market.no !== 'number') return pos; // Market data might not be loaded yet
 
         const currentPrice = pos.side === 'YES' ? market.yes : market.no;
         const newValue = pos.shares * currentPrice;
@@ -1737,7 +1753,7 @@ export default function App() {
         ...trader,
         pnl: trader.pnl + (Math.random() - 0.5) * 1000 // Add some variance
       })).sort((a, b) => b.pnl - a.pnl) // Re-sort
-       .map((trader, index) => ({ ...trader, rank: index + 1 })); // Re-rank
+        .map((trader, index) => ({ ...trader, rank: index + 1 })); // Re-rank
       
       setLeaderboardData(newLeaderboardData);
       handleAddNotification("Leaderboard data has been refreshed.");
@@ -1812,7 +1828,7 @@ export default function App() {
     setWalletState('idle');
     setPortfolioOnboardingState('prompt');
     setProvider(null); // <-- NEW
-    setSigner(null);     // <-- NEW
+    setSigner(null);      // <-- NEW
     if (currentPage === 'portfolio') {
       setCurrentPage('markets');
     }
@@ -1851,13 +1867,6 @@ export default function App() {
     // A real implementation would call our smart wallet, not just USDC.
     
     const { tradeType, amount, shares, limitPrice } = tradeDetails;
-
-    // Validation is now done in TradePanel before this is called
-    // if (portfolioBalance.totalUSDC < amount) {
-    //   handleAddNotification("Trade failed: Insufficient funds.");
-    //   setToastMessage("Insufficient USDC balance!");
-    //   return;
-    // }
 
     // Update balance
     setPortfolioBalance(prev => ({
@@ -1973,7 +1982,7 @@ export default function App() {
       
       // 4. Send 'transfer' transaction
       // In a real smart wallet setup, we would call a "deposit" function on the smart wallet contract
-      // that internally performs the transferFrom after approval. 
+      // that internally performs the transferFrom after approval.  
       // For this simple simulation (using the standard ERC20 transfer):
       const transferTx = await usdcContract.transfer(SMART_WALLET_ADDRESS, parsedAmount);
       await transferTx.wait(); // Wait for transaction to be mined
@@ -2042,13 +2051,13 @@ export default function App() {
 
     } catch (err) {
         console.error("Withdrawal failed:", err);
-         if (err.code === 4001) {
+          if (err.code === 4001) {
             setToastMessage("Withdrawal rejected by user.");
             handleAddNotification("Withdrawal rejected by user.");
-         } else {
+        } else {
             setToastMessage("Withdrawal transaction failed.");
             handleAddNotification("Withdrawal failed.");
-         }
+        }
     }
   };
 
@@ -2133,8 +2142,8 @@ export default function App() {
             positions={positions}
             openOrders={openOrders}
             onCancelOrder={handleCancelOrder}
-            onDeposit={handleOpenDepositModal}     // <-- UPDATED
-            onWithdraw={handleOpenWithdrawModal}    // <-- UPDATED
+            onDeposit={handleOpenDepositModal}      // <-- UPDATED
+            onWithdraw={handleOpenWithdrawModal}     // <-- UPDATED
             onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal} // <-- NEW
           />
