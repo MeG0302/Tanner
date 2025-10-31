@@ -1,8 +1,30 @@
-<!-- ... existing code ... -->
-<body class="bg-black">
-    <!-- Your React app (app.jsx) will be injected into this div -->
-    <div id="root"></div>
-    <!-- CRITICAL FIX: Point to the main.jsx entry script -->
-    <script type="module" src="/src/main.jsx"></script>
-</body>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Career Snapshot - Jane Doe</title>
+    
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Optional: Add Inter font used in the component -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Apply Inter font as the default */
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 dark:bg-gray-900">
+    <!-- Your React app (from main.jsx) will be injected into this div -->
+    <div id="root"></div>
+    
+    <!-- Points to your React entry script -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
