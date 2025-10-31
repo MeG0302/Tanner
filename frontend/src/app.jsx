@@ -1441,7 +1441,8 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
             (closeType === 'Limit' && isLimitSubmitDisabled)
               ? 'bg-gray-700 cursor-not-allowed'
               : sideColor
-          }`}
+            }
+          `}
         >
           {closeType === 'Market' ? `Market Sell ${oppositeSide}` : `Place Limit Sell ${oppositeSide} Order`}
         </button>
@@ -2269,4 +2270,3 @@ export default function App() {
     </div>
   );
 }
-
