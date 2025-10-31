@@ -1752,7 +1752,8 @@ function MarketListPage({ markets, onMarketClick }) {
   // Filter based on search and category
   const filteredMarkets = markets
     .filter(m => activeCategory === 'All' || m.category === activeCategory) // <-- FIX: Fixed typo 'activeCategori'
-    .filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase()));
+    // --- FIX: Added 'm.title &&' to prevent crash if a market has no title ---
+    .filter(m => m.title && m.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -1878,6 +1879,14 @@ export default function App() {
     const priceInterval = setInterval(() => {
       setMarkets(prevMarkets =>
         prevMarkets.map(m => {
+          // --- FIX: Add guard for markets from backend that might not have an 'outcomes' array ---
+          // This was the source of your crash at app.jsx:1882
+          if (!Array.isArray(m.outcomes)) {
+            // If outcomes are missing or not an array, return the market object unmodified.
+            return m;
+          }
+          // --- END FIX ---
+
           // Create a copy of outcomes to avoid direct mutation
           const newOutcomes = m.outcomes.map(o => {
             // Skip if price data is missing
