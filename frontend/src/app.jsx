@@ -31,13 +31,11 @@ function generateUniqueId() {
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // !!! CRITICAL: This MUST point to your running backend server !!!
-  const TARGET_URL = 'http://92.246.141.205:3001/api/markets';
-  
-  // --- FIX: Mixed Content Error ---
-  // The frontend is on HTTPS, but the backend is on HTTP.
-  // We must use a CORS proxy to bypass the browser's "Mixed Content" security block.
-  const API_URL = 'https://corsproxy.io/?' + encodeURIComponent(TARGET_URL);
+  // --- !!! THIS IS THE FIX !!! ---
+  // We no longer use the proxy. We use a relative path,
+  // which the vite.config.js proxy will catch and forward.
+  const API_URL = '/api/markets';
+  // --- END OF FIX ---
 
   // Added a brief delay to prevent spamming failed requests
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -55,11 +53,11 @@ export const fetchMarkets = async (setToastMessage) => {
     console.log("------------------------------------------------");
     console.error("BACKEND FETCH FAILED: Failed to fetch", error);
     if (error.message.includes('Failed to fetch')) {
-        console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${TARGET_URL}`);
+        console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${API_URL}`);
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The API_URL constant in app.jsx is incorrect (or blocked by Mixed Content).");
+        console.error("3. The Vite proxy config in vite.config.js is incorrect.");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
@@ -657,7 +655,7 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
   if (!market) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-        <p className="text-gray-400">Market data not found.</p>
+          <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
@@ -1694,7 +1692,7 @@ export default function App() {
       } catch (error) {
         console.error("Failed to fetch markets:", error);
         handleAddNotification("Error fetching markets.", 'error');
-        setMarkets(initialMarkets); // Fallback to mock data if fetch fails completely
+        setMarkets([]); // Fallback to empty array
       }
       setIsLoading(false);
     };
@@ -2058,7 +2056,7 @@ export default function App() {
 
     } catch (err) {
         console.error("Withdrawal failed:", err);
-          if (err.code === 4001) {
+         if (err.code === 4001) {
             setToastMessage("Withdrawal rejected by user.");
             handleAddNotification("Withdrawal rejected by user.");
         } else {
@@ -2235,3 +2233,4 @@ export default function App() {
     </div>
   );
 }
+
