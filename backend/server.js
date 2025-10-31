@@ -244,23 +244,3 @@ app.get('/api/markets', async (req, res) => {
     fetchKalshiData(),
     fetchLimitlessData(),
   ]);
-
-  // Combine all successful results
-  const allNormalizedMarkets = results
-    .filter(result => result.status === 'fulfilled') // Only take successful fetches
-    .flatMap(result => result.value); // Flatten the arrays [[...], [...]] into [...]
-  
-  // Sort all markets from all platforms by 24h volume
-  const sortedMarkets = allNormalizedMarkets.sort((a, b) => b.volume_24h - a.volume_24h);
-
-  console.log(`Returning ${sortedMarkets.length} normalized markets.`);
-  res.json(sortedMarkets);
-});
-
-// ====================================================================
-// START THE SERVER
-// ====================================================================
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Aggregator backend listening on port ${PORT}`);
-});
