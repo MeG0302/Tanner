@@ -48,7 +48,16 @@ export const fetchMarkets = async (setToastMessage) => {
     console.log("Successfully fetched LIVE data:", data);
     return data;
   } catch (error) {
-    console.error("Failed to fetch LIVE markets from backend. Using mock data as fallback:", error);
+    // --- FIX: Added more detailed logging to explain the connection error ---
+    console.error("------------------------------------------------");
+    console.error("BACKEND FETCH FAILED:", error.message);
+    console.error("This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at:", API_URL);
+    console.error("Possible Causes:");
+    console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
+    console.error("2. A firewall on your server is blocking port 3001.");
+    console.error("3. The API_URL constant in app.jsx is incorrect.");
+    console.error("Falling back to mock data as a temporary measure.");
+    console.error("------------------------------------------------");
     
     // Check if setToastMessage exists before calling it
     if (setToastMessage) {
