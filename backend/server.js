@@ -1,5 +1,6 @@
 const express = require('express');
-const fetch = require('node-fetch-cjs'); // Use node-fetch-cjs for CommonJS
+// --- FIX: Correctly import the default export from node-fetch-cjs ---
+const { default: fetch } = require('node-fetch-cjs'); // Use node-fetch-cjs for CommonJS
 const cors = require('cors');
 
 const app = express();
