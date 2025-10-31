@@ -1,7 +1,7 @@
 /**
  * Tanner.xyz Aggregator Backend
  * * This Node.js server acts as a proxy and data aggregator.
- * It fetches market data from multiple prediction market APIs (Polymarket, Kalshi, Limitless),
+ * It fetches market data from multiple prediction market APIs (Polymarket, Kalshi),
  * normalizes the data into a consistent format, and provides a single endpoint
  * for the React frontend to consume.
  * * This approach is CRITICAL to bypass browser CORS (Cross-Origin Resource Sharing)
@@ -76,7 +76,7 @@ function nativeFetch(url) {
 }
 
 // ====================================================================
-// NEW: OPTIMIZATION & CHART HELPERS
+// OPTIMIZATION & DATA HELPERS
 // ====================================================================
 
 /**
@@ -101,7 +101,7 @@ function getAdvancedCategory(title) {
   const lowerTitle = title.toLowerCase();
 
   // Politics
-  if (lowerTitle.includes('trump') || lowerTitle.includes('biden') || lowerTitle.includes('election') || lowerTitle.includes('president')) {
+  if (lowerTitle.includes('trump') || lowerTitle.includes('biden') || lowerTitle.includes('election') || lowerTitle.includes('president') || lowerTitle.includes('mayor')) {
     return 'Politics';
   }
   // Geopolitics (New)
@@ -134,38 +134,35 @@ function getAdvancedCategory(title) {
 }
 
 /**
- * --- NEW: CHART FUNCTION ---
- * Generates a simple array of historical price data for charts.
- * @param {number} currentPrice The market's current 'yes' price (0.0 to 1.0).
- * @returns {Array<Object>} An array of data points [{ time, value }].
+ * --- NEW: HISTORICAL DATA SIMULATOR ---
+ * Generates a realistic (but fake) 7-day price history for an outcome.
+ * @param {number} startPrice The starting price (probability) for this outcome.
+ * @returns {Array<Object>} An array of data points for the chart.
  */
-function generateMarketHistory(currentPrice) {
-  let data = [];
-  // Start the simulation at a price *near* the current price for realism
-  let price = currentPrice - (Math.random() - 0.5) * 0.1;
-  
+function generateMarketHistory(startPrice) {
+  let history = [];
+  let price = startPrice;
   const now = Math.floor(Date.now() / 1000); // Current time in seconds
   const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
   const dataPoints = 168; // One point per hour for 7 days (7 * 24)
   const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
 
   for (let i = 0; i < dataPoints; i++) {
-    const change = (Math.random() - 0.5) * 0.02; // Small random change per hour
+    const change = (Math.random() - 0.5) * 0.02; // Small random change
     price += change;
-    if (price > 0.99) price = 0.99; // Cap at 99c
-    if (price < 0.01) price = 0.01; // Floor at 1c
+    if (price > 0.99) price = 0.99;
+    if (price < 0.01) price = 0.01;
     
-    // Calculate timestamp for this data point
-    const time = sevenDaysAgo + (i * timeStep);
-    
-    data.push({ time: time, value: price });
+    // The format required by Lightweight Charts is: { time: (seconds), value: (price) }
+    history.push({ time: sevenDaysAgo + (i * timeStep), value: price });
   }
   
-  // Ensure the very last point is *exactly* the current price
-  data[data.length - 1] = { time: now, value: currentPrice };
-
-  return data;
+  // Ensure the last data point is the *current* startPrice at the *current* time
+  history.push({ time: now, value: startPrice });
+  
+  return history;
 }
+
 
 // ====================================================================
 // DATA FETCHING FUNCTIONS (Using nativeFetch)
@@ -178,19 +175,17 @@ async function fetchPolymarketData() {
   try {
     const data = await nativeFetch(API_ENDPOINTS.POLYMARKET);
 
-    if (!data || !Array.isArray(data.data)) {
-      // NOTE: Polymarket sometimes returns the array directly, sometimes nested under 'data'. Check both.
-      const marketArray = Array.isArray(data) ? data : data.data;
+    // NOTE: Polymarket sometimes returns the array directly, sometimes nested under 'data'.
+    const marketArray = Array.isArray(data) ? data : data.data;
 
-      if (!Array.isArray(marketArray)) {
-        console.error('Invalid Polymarket response structure. Expected array.', data);
-        throw new Error('Invalid Polymymarket structure');
-      }
-      return marketArray.map(normalizePolymarket).filter(m => m !== null).slice(0, 25);
+    if (!Array.isArray(marketArray)) {
+      console.error('Invalid Polymarket response structure. Expected array.', data);
+      throw new Error('Invalid Polymarket structure');
     }
     
-    // Default case (assuming it returns { data: [...] })
-    return data.data.map(normalizePolymarket).filter(m => m !== null).slice(0, 25); 
+    // Use .map to transform data, .filter(Boolean) to remove any nulls from failed normalization
+    return marketArray.map(normalizePolymarket).filter(Boolean).slice(0, 25);
+    
   } catch (error) {
     console.error('Failed to fetch from Polymarket:', error.message);
     return [];
@@ -210,10 +205,10 @@ async function fetchKalshiData() {
         throw new Error('Invalid Kalshi structure');
     }
 
-    // 2. Map and normalize, sorting by volume (Kalshi does not provide live data separately)
+    // 2. Map and normalize, sorting by volume
     return marketsData.markets
-      .map(normalizeKalshi)
-      .filter(m => m !== null)
+      .map(normalizeKalshi) // This will now return the new multi-outcome format
+      .filter(Boolean) // Filter out any nulls from failed normalization
       .sort((a, b) => b.volume_24h - a.volume_24h)
       .slice(0, 25);
 
@@ -227,40 +222,58 @@ async function fetchKalshiData() {
  * Fetches market data from Limitless. (Temporarily disabled)
  */
 async function fetchLimitlessData() {
-  // NOTE: TEMPORARILY DISABLED due to persistent non-JSON responses.
+  // NOTE: TEMPORARILY DISABLED
   return []; 
 }
 
 // ====================================================================
-// DATA NORMALIZATION FUNCTIONS
+// DATA NORMALIZATION FUNCTIONS (UPDATED FOR MULTI-OUTCOME)
 // ====================================================================
 
 /**
- * Converts a Polymarket market object to our standard format.
+ * --- UPDATED ---
+ * Converts a Polymarket market object to our new standard multi-outcome format.
  */
 function normalizePolymarket(market) {
   try {
-    const yesToken = market.tokens.find(t => t.outcome === 'Yes');
-    const noToken = market.tokens.find(t => t.outcome === 'No');
-    
-    const yesPrice = parseFloat(yesToken?.price || market.lastTradePrice || 0.5);
-    const noPrice = parseFloat(noToken?.price || (1 - yesPrice));
-
-    if (!market.question) return null; // Skip if no title/question
-
     const fullTitle = market.question;
-
-    return {
+    const commonData = {
       id: `poly-${market.id}`,
       title: fullTitle,
       shortTitle: optimizeTitle(fullTitle),
       platform: 'Polymarket',
       category: getAdvancedCategory(fullTitle),
-      yes: yesPrice,
-      no: noPrice,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
-      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
+      outcomes: [], // We will populate this next
     };
+
+    // Polymarket's `market.tokens` array contains the outcomes.
+    if (market.tokens && market.tokens.length > 0) {
+      // This is a Multi-Outcome market (like the election)
+      commonData.outcomes = market.tokens.map(token => {
+        const price = parseFloat(token.price || 0);
+        return {
+          name: token.outcome, // e.g., "Zohran Mamdani", "Andrew Cuomo", "Yes", "No"
+          price: price,
+          history: generateMarketHistory(price), // Generate history for this specific outcome
+        };
+      });
+
+    } else {
+      // This is a simple Yes/No market that isn't using the tokens array
+      const yesPrice = parseFloat(market.lastTradePrice || 0.5);
+      const noPrice = 1 - yesPrice;
+      
+      commonData.outcomes = [
+        { name: 'Yes', price: yesPrice, history: generateMarketHistory(yesPrice) },
+        { name: 'No', price: noPrice, history: generateMarketHistory(noPrice) },
+      ];
+    }
+    
+    // Sort outcomes by price, descending (Top outcome first)
+    commonData.outcomes.sort((a, b) => b.price - a.price);
+
+    return commonData;
 
   } catch (err) {
     console.error("Error normalizing Polymarket market:", err.message, market);
@@ -269,28 +282,31 @@ function normalizePolymarket(market) {
 }
 
 /**
- * Converts a Kalshi event object to our standard format.
+ * --- UPDATED ---
+ * Converts a Kalshi event object to our new standard multi-outcome format.
+ * Kalshi markets are *always* binary (Yes/No).
  */
 function normalizeKalshi(market) {
   try {
-    const yesPriceCents = market.yes_ask || market.yes_bid || 50;
-    const noPriceCents = market.no_ask || market.no_bid || 50;
-    const yesPrice = yesPriceCents / 100.0; // Convert to 0-1.0
+    const fullTitle = market.subtitle || market.title;
     
-    const fullTitle = market.subtitle || market.title; 
-
+    // Kalshi returns prices in cents (0-100)
+    const yesPrice = (market.yes_ask || market.yes_bid || 50) / 100.0;
+    const noPrice = (market.no_ask || market.no_bid || 50) / 100.0;
+    
     return {
       id: `kalshi-${market.ticker_name || market.ticker}`,
       title: fullTitle,
       shortTitle: optimizeTitle(fullTitle),
       platform: 'Kalshi',
       category: getAdvancedCategory(fullTitle),
-      yes: yesPrice,
-      no: noPriceCents / 100.0,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
-      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
+      // Kalshi markets are always Yes/No, so we format them accordingly
+      outcomes: [
+        { name: 'Yes', price: yesPrice, history: generateMarketHistory(yesPrice) },
+        { name: 'No', price: noPrice, history: generateMarketHistory(noPrice) },
+      ],
     };
-
   } catch (err) {
     console.error("Error normalizing Kalshi market:", err.message, market);
     return null;
@@ -298,26 +314,11 @@ function normalizeKalshi(market) {
 }
 
 /**
- * Converts a Limitless market object to our standard format.
+ * Converts a Limitless market object to our standard format. (DISABLED)
  */
 function normalizeLimitless(market) {
-  // This function is currently disabled
-  try {
-    const yesPrice = parseFloat(market.yes_price || market.price || 0.5);
-    return {
-      id: `limitless-${market.id || market.ticker}`,
-      title: market.title || market.name,
-      platform: 'Limitless',
-      category: market.category || 'Crypto',
-      yes: yesPrice,
-      no: parseFloat(market.no_price || (1 - (market.price || 0.5))),
-      volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
-      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
-    };
-  } catch (err) {
-    console.error("Error normalizing Limitless market:", err.message, market);
-    return null;
-  }
+  // This function is currently disabled in fetchLimitlessData()
+  return null;
 }
 
 // ====================================================================
@@ -331,7 +332,7 @@ app.get('/api/markets', async (req, res) => {
   const results = await Promise.allSettled([
     fetchPolymarketData(),
     fetchKalshiData(),
-    fetchLimitlessData(), // Currently disabled
+    fetchLimitlessData(), // Currently disabled, returns []
   ]);
 
   // Combine all successful results
