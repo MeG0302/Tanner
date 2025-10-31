@@ -76,6 +76,64 @@ function nativeFetch(url) {
 }
 
 // ====================================================================
+// NEW: OPTIMIZATION HELPERS
+// ====================================================================
+
+/**
+ * Creates a shortened, optimized title for a market card.
+ * @param {string} title The full market title.
+ * @returns {string} A truncated title, if necessary.
+ */
+function optimizeTitle(title) {
+  const MAX_LENGTH = 75; // Max characters for a card title
+  if (title.length > MAX_LENGTH) {
+    return title.substring(0, MAX_LENGTH - 3) + '...';
+  }
+  return title;
+}
+
+/**
+ * Intelligently assigns a category based on keywords in the title.
+ * @param {string} title The market title.
+ * @returns {string} A specific category.
+ */
+function getAdvancedCategory(title) {
+  const lowerTitle = title.toLowerCase();
+
+  // Politics
+  if (lowerTitle.includes('trump') || lowerTitle.includes('biden') || lowerTitle.includes('election') || lowerTitle.includes('president')) {
+    return 'Politics';
+  }
+  // Geopolitics (New)
+  if (lowerTitle.includes('russia') || lowerTitle.includes('china') || lowerTitle.includes('taiwan') || lowerTitle.includes('gaza') || lowerTitle.includes('war')) {
+    return 'Geopolitics';
+  }
+  // Crypto
+  if (lowerTitle.includes('btc') || lowerTitle.includes('bitcoin') || lowerTitle.includes('eth') || lowerTitle.includes('solana') || lowerTitle.includes('crypto')) {
+    return 'Crypto';
+  }
+  // Economics
+  if (lowerTitle.includes('fed') || lowerTitle.includes('inflation') || lowerTitle.includes('interest rate') || lowerTitle.includes('gdp') || lowerTitle.includes('cpi')) {
+    return 'Economics';
+  }
+  // Sports
+  if (lowerTitle.includes('nba') || lowerTitle.includes('nfl') || lowerTitle.includes('lakers') || lowerTitle.includes('world cup')) {
+    return 'Sports';
+  }
+  // World (New)
+  if (lowerTitle.includes('india') || lowerTitle.includes('uk') || lowerTitle.includes('prime minister')) {
+    return 'World';
+  }
+  // Culture (New)
+  if (lowerTitle.includes('movie') || lowerTitle.includes('box office') || lowerTitle.includes('taylor swift') || lowerTitle.includes('grammy')) {
+    return 'Culture';
+  }
+
+  // Fallback
+  return 'Other';
+}
+
+// ====================================================================
 // DATA FETCHING FUNCTIONS (Using nativeFetch)
 // ====================================================================
 
@@ -178,15 +236,21 @@ function normalizePolymarket(market) {
 
     if (!market.question) return null; // Skip if no title/question
 
+    // --- OPTIMIZATION APPLIED ---
+    const fullTitle = market.question;
+
     return {
       id: `poly-${market.id}`,
-      title: market.question,
+      title: fullTitle,
+      shortTitle: optimizeTitle(fullTitle), // <-- NEW
       platform: 'Polymarket',
-      category: market.category || 'Politics',
+      category: getAdvancedCategory(fullTitle), // <-- UPDATED
       yes: yesPrice,
       no: noPrice,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
     };
+    // --- END OPTIMIZATION ---
+
   } catch (err) {
     console.error("Error normalizing Polymarket market:", err.message, market);
     return null;
@@ -201,18 +265,24 @@ function normalizeKalshi(market) {
     // Kalshi returns prices in cents (0-100) directly on the market object
     const yesPriceCents = market.yes_ask || market.yes_bid || 50; // Use ask/bid or default
     const noPriceCents = market.no_ask || market.no_bid || 50;   // Use ask/bid or default
+    
+    // --- OPTIMIZATION APPLIED ---
+    // Kalshi's subtitle is often the better, shorter question
+    const fullTitle = market.subtitle || market.title; 
 
     return {
       id: `kalshi-${market.ticker_name || market.ticker}`,
-      // Kalshi often uses the 'subtitle' for the key question
-      title: market.subtitle || market.title, 
+      title: fullTitle,
+      shortTitle: optimizeTitle(fullTitle), // <-- NEW
       platform: 'Kalshi',
-      category: market.category || 'Economics',
+      category: getAdvancedCategory(fullTitle), // <-- UPDATED
       // Convert cents to 0-1.0 format
       yes: yesPriceCents / 100.0,
       no: noPriceCents / 100.0,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
     };
+    // --- END OPTIMIZATION ---
+
   } catch (err) {
     console.error("Error normalizing Kalshi market:", err.message, market);
     return null;
