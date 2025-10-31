@@ -9,36 +9,73 @@
  */
 
 const express = require('express');
-// FIX: Use require() to import node-fetch-cjs correctly in a CommonJS environment
-const fetch = (...args) => import('node-fetch-cjs').then(({default: fetch}) => fetch(...args));
+const https = require('https'); // FIX: Use native Node.js HTTPS module
+const http = require('http');   // Added for http support (though APIs are mostly https)
 const cors = require('cors');
 
 const app = express();
 const PORT = 3001;
 
 // Enable CORS for your frontend
-// In production, you should restrict this to your actual domain:
-// app.use(cors({ origin: 'http://your-domain.com' }));
-app.use(cors()); // Open for development
+app.use(cors());
 
 // --- API Endpoints ---
 const API_ENDPOINTS = {
-  // Polymarket: Using v2 (gamma-api) as it's simpler for lists.
-  // We sort by 24h volume and take the top 100.
+  // Polymarket: We use HTTPS and accept public data.
   POLYMARKET: 'https://gamma-api.polymarket.com/markets?limit=100&sort_by=volume_24h&order_by=desc&active=true',
   
-  // Kalshi: This is a multi-step process.
-  // 1. Get all *open* market tickers
+  // Kalshi: We use the main markets endpoint since the live-data one 404s.
   KALSHI_MARKETS: 'https://api.elections.kalshi.com/trade-api/v2/markets?status=open&limit=500',
-  // 2. Get the *live data* (prices, volume) for those tickers
-  KALSHI_LIVE_DATA: 'https://api.elections.kalshi.com/trade-api/v2/live-data',
-
-  // Limitless: Endpoint for their markets
+  
+  // Limitless: This URL is likely incorrect, but we keep it here for diagnostics.
   LIMITLESS: 'https://api.limitless.exchange/api-v1/markets'
 };
 
 // ====================================================================
-// DATA FETCHING FUNCTIONS
+// NATIVE HTTP FETCH HELPER (FINAL FIX FOR "fetch is not a function")
+// ====================================================================
+
+/**
+ * Executes a GET request using Node's native HTTP/HTTPS modules.
+ * @param {string} url The URL to fetch.
+ * @returns {Promise<any>} The parsed JSON data.
+ */
+function nativeFetch(url) {
+  const client = url.startsWith('https') ? https : http;
+  
+  return new Promise((resolve, reject) => {
+    client.get(url, (res) => {
+      let data = '';
+
+      // A chunk of data has been received.
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      // The whole response has been received.
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            resolve(JSON.parse(data));
+          } catch (e) {
+            // Log raw response on JSON parsing failure
+            console.error(`JSON Parse Error for ${url}: ${e.message}. Raw data: ${data.substring(0, 500)}...`);
+            reject(new Error(`Failed to parse JSON response. Status: ${res.statusCode}`));
+          }
+        } else {
+          // Log the raw response body on HTTP error
+          console.error(`HTTP Error Body for ${url} (Status ${res.statusCode}): ${data.substring(0, 500)}...`);
+          reject(new Error(`HTTP Error Status: ${res.statusCode} for ${url}`));
+        }
+      });
+    }).on('error', (err) => {
+      reject(new Error(`Native Fetch Error: ${err.message}`));
+    });
+  });
+}
+
+// ====================================================================
+// DATA FETCHING FUNCTIONS (Using nativeFetch)
 // ====================================================================
 
 /**
@@ -46,34 +83,19 @@ const API_ENDPOINTS = {
  */
 async function fetchPolymarketData() {
   try {
-    const response = await fetch(API_ENDPOINTS.POLYMARKET);
-    
-    // --- DEBUGGING: Log raw response text ---
-    const rawText = await response.text();
-    if (!response.ok) {
-      console.error(`Polymarket API error: ${response.statusText}`, rawText);
-      throw new Error(`Polymarket API error: ${response.statusText}`);
-    }
+    const data = await nativeFetch(API_ENDPOINTS.POLYMARKET);
 
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (jsonError) {
-      console.error('Failed to parse Polymarket JSON:', jsonError.message);
-      console.error('Polymarket Raw Response:', rawText);
-      throw new Error('Polymarket returned invalid JSON');
-    }
-
-    // --- DEBUGGING: Validate expected data structure ---
+    // FIX: Polymarket structure is { data: [...] }
     if (!data || !Array.isArray(data.data)) {
-      console.error('Invalid Polymarket response structure. Expected { data: [...] }', data);
-      throw new Error('Invalid Polymarket response structure');
+      console.error('Invalid Polymarket structure. Expected { data: [...] }', data);
+      throw new Error('Invalid Polymarket structure');
     }
-
-    return data.data.map(normalizePolymarket).filter(m => m !== null); // Filter out nulls
+    
+    // Take top 25
+    return data.data.map(normalizePolymarket).filter(m => m !== null).slice(0, 25);
   } catch (error) {
     console.error('Failed to fetch from Polymarket:', error.message);
-    return []; // Return empty array on failure
+    return [];
   }
 }
 
@@ -82,29 +104,21 @@ async function fetchPolymarketData() {
  */
 async function fetchKalshiData() {
   try {
-    // 1. Fetch all open market tickers
-    const marketsResponse = await fetch(API_ENDPOINTS.KALSHI_MARKETS);
-    if (!marketsResponse.ok) throw new Error(`Kalshi API (markets) error: ${marketsResponse.statusText}`);
-    const marketsData = await marketsResponse.json();
+    // FIX: Only use the main markets endpoint to avoid 404 on live-data
+    const marketsData = await nativeFetch(API_ENDPOINTS.KALSHI_MARKETS);
     
-    // 2. Fetch live data for all markets
-    const liveDataResponse = await fetch(API_ENDPOINTS.KALSHI_LIVE_DATA);
-    if (!liveDataResponse.ok) throw new Error(`Kalshi API (live-data) error: ${liveDataResponse.statusText}`);
-    const liveData = await liveDataResponse.json();
-
-    // 3. Combine the data: Create a map of live data for easy lookup
-    const liveDataMap = new Map(liveData.markets.map(m => [m.ticker_name, m]));
-
-    // 4. Map and normalize, filtering by top 25 volume
+    // Kalshi structure is { markets: [...] }
+    if (!marketsData || !Array.isArray(marketsData.markets)) {
+      console.error('Invalid Kalshi structure. Expected { markets: [...] }', marketsData);
+      throw new Error('Invalid Kalshi structure');
+    }
+    
+    // We can only normalize based on the data available in this single call.
     return marketsData.markets
-      .map(market => {
-        const liveMarketData = liveDataMap.get(market.ticker_name);
-        return normalizeKalshi(market, liveMarketData); // Pass both info and live data
-      })
-      .filter(m => m !== null) // Filter out nulls
-      .sort((a, b) => b.volume_24h - a.volume_24h) // Sort by 24h volume
-      .slice(0, 25); // Take top 25
-
+      .map(market => normalizeKalshi(market))
+      .filter(m => m !== null)
+      .sort((a, b) => b.volume_24h - a.volume_24h) // Sort by available volume
+      .slice(0, 25);
   } catch (error) {
     console.error('Failed to fetch from Kalshi:', error.message);
     return [];
@@ -115,59 +129,36 @@ async function fetchKalshiData() {
  * Fetches market data from Limitless.
  */
 async function fetchLimitlessData() {
-  try {
-    const response = await fetch(API_ENDPOINTS.LIMITLESS);
+  // FIX: This API is currently broken/misconfigured. Disable for now.
+  // We will re-enable this later if you find a working Limitless API URL.
+  // try {
+  //   const data = await nativeFetch(API_ENDPOINTS.LIMITLESS);
 
-    // --- DEBUGGING: Log raw response text ---
-    const rawText = await response.text();
-    if (!response.ok) {
-      console.error(`Limitless API error: ${response.statusText}`, rawText);
-      throw new Error(`Limitless API error: ${response.statusText}`);
-    }
-
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch (jsonError) {
-      console.error('Failed to parse Limitless JSON:', jsonError.message);
-      console.error('Limitless Raw Response:', rawText);
-      // This error is what we are seeing: "Unexpected token < in JSON..."
-      // It means the response was HTML (like a 404 or 500 error page), not JSON.
-      throw new Error(`Limitless returned HTML instead of JSON: ${jsonError.message}`);
-    }
-
-    // --- DEBUGGING: Validate expected data structure ---
-    if (!data || !Array.isArray(data)) {
-        console.error('Invalid Limitless response structure. Expected [...]', data);
-        throw new Error('Invalid Limitless response structure');
-    }
-
-    return data
-      .map(normalizeLimitless)
-      .filter(m => m !== null)
-      .sort((a, b) => b.volume_24h - a.volume_24h)
-      .slice(0, 25);
-  } catch (error) {
-    console.error('Failed to fetch from Limitless:', error.message);
-    return [];
-  }
+  //   if (!data || !Array.isArray(data)) {
+  //       console.error('Invalid Limitless structure. Expected [...]', data);
+  //       throw new Error('Invalid Limitless structure');
+  //   }
+    
+  //   return data.map(normalizeLimitless).filter(m => m !== null).slice(0, 25);
+  // } catch (error) {
+  //   console.error('Failed to fetch from Limitless:', error.message);
+  //   return [];
+  // }
+  console.log("Limitless fetch temporarily skipped (API URL likely incorrect/non-JSON response)");
+  return [];
 }
 
 // ====================================================================
 // DATA NORMALIZATION FUNCTIONS
 // ====================================================================
 
-/**
- * Converts a Polymarket market object to our standard format.
- */
 function normalizePolymarket(market) {
   try {
-    // Find the 'YES' and 'NO' tokens
     const yesToken = market.tokens.find(t => t.outcome === 'Yes');
     const noToken = market.tokens.find(t => t.outcome === 'No');
 
-    // If no 'Yes' or 'No' outcome, we can't use this market
-    if (!yesToken || !noToken) return null;
+    // Polymarket prices are often in a 'price' field on the token object
+    if (!yesToken || !noToken || yesToken.price === undefined || noToken.price === undefined) return null;
 
     return {
       id: `poly-${market.id}`,
@@ -184,24 +175,23 @@ function normalizePolymarket(market) {
   }
 }
 
-/**
- * Converts a Kalshi event object to our standard format.
- */
-function normalizeKalshi(market, liveData) {
+function normalizeKalshi(market) {
   try {
-    // If no live data, we can't get prices/volume
-    if (!liveData) return null;
+    // Kalshi Market Endpoint structure provides most data directly.
+    // Price fields are `yes_price` and `no_price` (in cents)
+    
+    // We assume the market is valid if prices exist (they are required to trade)
+    if (market.yes_price === undefined || market.no_price === undefined) return null;
 
     return {
       id: `kalshi-${market.ticker_name}`,
-      // --- FIX: Use subtitle, which has the actual question ---
-      title: market.subtitle, 
+      title: market.subtitle || market.title, 
       platform: 'Kalshi',
       category: market.category || 'Economics',
       // Kalshi prices are in cents (0-100), convert to 0-1.0
-      yes: liveData.yes_price / 100.0,
-      no: liveData.no_price / 100.0,
-      volume_24h: parseFloat(liveData.volume_24h) || 0,
+      yes: market.yes_price / 100.0,
+      no: market.no_price / 100.0,
+      volume_24h: parseFloat(market.volume_24h) || 0,
     };
   } catch (err) {
     console.error("Error normalizing Kalshi market:", err.message, market);
@@ -209,26 +199,9 @@ function normalizeKalshi(market, liveData) {
   }
 }
 
-/**
- * Converts a Limitless market object to our standard format.
- */
 function normalizeLimitless(market) {
-  try {
-    // --- GUESSING field names based on other APIs ---
-    // --- WE WILL NEED TO UPDATE THIS ---
-    return {
-      id: `limitless-${market.id || market.ticker}`,
-      title: market.title || market.name,
-      platform: 'Limitless',
-      category: market.category || 'Crypto',
-      yes: parseFloat(market.yes_price || market.price),
-      no: parseFloat(market.no_price || (1 - market.price)),
-      volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
-    };
-  } catch (err) {
-    console.error("Error normalizing Limitless market:", err.message, market);
-    return null;
-  }
+  // Since Limitless is currently skipped, this function is mostly a placeholder for when we fix the API call.
+  return null;
 }
 
 // ====================================================================
@@ -242,15 +215,14 @@ app.get('/api/markets', async (req, res) => {
   const results = await Promise.allSettled([
     fetchPolymarketData(),
     fetchKalshiData(),
-    fetchLimitlessData(),
+    fetchLimitlessData(), // This will be skipped
   ]);
 
   // Combine all successful results
   const allNormalizedMarkets = results
-    .filter(result => result.status === 'fulfilled') // Only take successful fetches
-    .flatMap(result => result.value); // Flatten the arrays [[...], [...]] into [...]
+    .filter(result => result.status === 'fulfilled')
+    .flatMap(result => result.value);
   
-  // Sort all markets from all platforms by 24h volume
   const sortedMarkets = allNormalizedMarkets.sort((a, b) => b.volume_24h - a.volume_24h);
 
   console.log(`Returning ${sortedMarkets.length} normalized markets.`);
@@ -264,3 +236,4 @@ app.get('/api/markets', async (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Aggregator backend listening on port ${PORT}`);
 });
+
