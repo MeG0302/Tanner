@@ -1,13 +1,38 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-
-export default defineConfig({
-  plugins: [react()],
-  // We explicitly set the base path to '/' to ensure assets are requested from the root,
-  // which is critical for resolving the 404 error on your VPS when accessed by IP.
-  base: '/',
-  server: {
-    host: '0.0.0.0', // Binds to all network interfaces, essential for external access via VPS IP
-    port: 5173,
-  }
-});
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Updated title to match your project -->
+    <title>Tanner.xyz</title>
+    
+    <!-- Load Tailwind CSS with cache-busting query string -->
+    <script src="https://cdn.tailwindcss.com?v=1"></script>
+    
+    <!-- 
+      *** ADDED THIS SCRIPT ***
+      This loads the ethers.js library, which is required
+      for your React app to talk to MetaMask.
+     -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+    
+    <!-- Optional: Add Inter font used in the component -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+      /* Apply Inter font as the default */
+      body {
+        font-family: 'Inter', sans-serif;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 dark:bg-gray-900">
+    <!-- Your React app (from main.jsx) will be injected into this div -->
+    <div id="root"></div>
+    
+    <!-- Points to your React entry script -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
