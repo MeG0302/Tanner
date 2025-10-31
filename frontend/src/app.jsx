@@ -348,12 +348,15 @@ function HistoricalChart({ outcomes }) {
 
     // --- NEW: Add a line series FOR EACH outcome ---
     outcomes.forEach((outcome, index) => {
-      const lineSeries = chart.addLineSeries({
-        color: chartColors[index % chartColors.length], // Cycle through colors
-        lineWidth: 2,
-        title: outcome.name, // This will appear in the legend
-      });
-      lineSeries.setData(outcome.history);
+      // Safety check for history data
+      if (Array.isArray(outcome.history) && outcome.history.length > 0) {
+        const lineSeries = chart.addLineSeries({
+          color: chartColors[index % chartColors.length], // Cycle through colors
+          lineWidth: 2,
+          title: outcome.name, // This will appear in the legend
+        });
+        lineSeries.setData(outcome.history);
+      }
     });
     
     // Fit the chart to the data
@@ -361,7 +364,9 @@ function HistoricalChart({ outcomes }) {
 
     // Handle chart resizing
     const handleResize = () => {
-      chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
     };
 
     window.addEventListener('resize', handleResize);
@@ -1670,9 +1675,12 @@ function TickerTape({ newsItems }) {
  */
 function MarketCard({ market, onMarketClick }) {
   
+  // --- FIX: Add a safety check for market.outcomes ---
+  const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
+  
   // Get the top 2 outcomes (they are pre-sorted by the backend)
-  const topOutcome = market.outcomes[0] || { name: 'N/A', price: 0 };
-  const secondOutcome = market.outcomes[1] || { name: 'N/A', price: 0 };
+  const topOutcome = outcomes[0] || { name: 'N/A', price: 0 };
+  const secondOutcome = outcomes[1] || { name: 'N/A', price: 0 };
 
   // Check if it's a simple Yes/No market
   const isBinary = topOutcome.name === 'Yes' && secondOutcome.name === 'No';
@@ -1743,7 +1751,7 @@ function MarketListPage({ markets, onMarketClick }) {
 
   // Filter based on search and category
   const filteredMarkets = markets
-    .filter(m => activeCategory === 'All' || m.category === activeCategori)
+    .filter(m => activeCategory === 'All' || m.category === activeCategory) // <-- FIX: Fixed typo 'activeCategori'
     .filter(m => m.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
