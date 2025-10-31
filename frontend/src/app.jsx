@@ -33,9 +33,10 @@ export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
   // --- !!! THIS IS THE FIX !!! ---
-  // We no longer use the proxy. We use a relative path,
-  // which the vite.config.js proxy will catch and forward.
-  const API_URL = '/api/markets';
+  // The relative path '/api/markets' was failing in the current environment
+  // because it couldn't be resolved from a 'blob:' URL.
+  // Changed it to the full, absolute URL of your backend.
+  const API_URL = 'http://92.246.141.205:3001/api/markets';
   // --- END OF FIX ---
 
   // Added a brief delay to prevent spamming failed requests
@@ -1678,60 +1679,74 @@ function MarketCard({ market, onMarketClick }) {
   // --- FIX: Add a safety check for market.outcomes ---
   const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
   
-  // Get the top 2 outcomes (they are pre-sorted by the backend)
-  const topOutcome = outcomes[0] || { name: 'N/A', price: 0 };
-  const secondOutcome = outcomes[1] || { name: 'N/A', price: 0 };
+  // --- UPDATED: Get top 2 outcomes (can be undefined) ---
+  const topOutcome = outcomes[0];
+  const secondOutcome = outcomes[1];
 
   // Check if it's a simple Yes/No market
-  const isBinary = topOutcome.name === 'Yes' && secondOutcome.name === 'No';
+  const isBinary = topOutcome?.name === 'Yes' && secondOutcome?.name === 'No';
 
   return (
     <div
-      className="bg-gray-950 border border-gray-800 rounded-lg shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200"
+      className="bg-gray-950 border border-gray-800 rounded-lg shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200 flex flex-col justify-between" // Added flex to help layout
       onClick={() => onMarketClick(market)}
     >
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs text-gray-400 uppercase">{market.category}</span>
-        <img
-          src={getLogo(market.platform)}
-          alt={market.platform}
-          className="w-6 h-6 rounded-full"
-          style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
-        />
-      </div>
-      <div className="text-xs text-gray-500 mb-1">
-        Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
-      </div>
-      
-      {/* --- UPDATED: Title --- */}
-      <h3 className="text-lg font-semibold text-white mb-4 h-20">{market.shortTitle || market.title}</h3>
-      
-      {/* --- UPDATED: Price Display --- */}
-      <div className="flex items-center justify-between space-x-4">
-        <div className="flex items-center space-x-2">
-          <span className="text-3xl font-bold text-blue-400">
-            {(topOutcome.price * 100).toFixed(0)}¢
-          </span>
-          <span className="text-sm text-gray-400 truncate max-w-[80px]">{topOutcome.name}</span>
+      <div> {/* Added a wrapper for top content */}
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+          <img
+            src={getLogo(market.platform)}
+            alt={market.platform}
+            className="w-6 h-6 rounded-full"
+            style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
+          />
+        </div>
+        <div className="text-xs text-gray-500 mb-1">
+          Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
         </div>
         
-        {/* Only show the second outcome if it's not a simple Yes/No */}
-        {!isBinary && (
-          <div className="flex items-center space-x-2">
-            <span className="text-3xl font-bold text-gray-500">
-              {(secondOutcome.price * 100).toFixed(0)}¢
-            </span>
-            <span className="text-sm text-gray-400 truncate max-w-[80px]">{secondOutcome.name}</span>
-          </div>
-        )}
-        
-        {/* Special case for Yes/No, show the "No" price */}
-        {isBinary && (
-           <div className="flex items-center space-x-2">
-            <span className="text-3xl font-bold text-red-400">
-              {(secondOutcome.price * 100).toFixed(0)}¢
-            </span>
-            <span className="text-sm text-gray-400">{secondOutcome.name}</span>
+        {/* --- UPDATED: Title (Using line-clamp to prevent overflow) --- */}
+        <h3 className="text-lg font-semibold text-white mb-4 h-24 line-clamp-3">
+          {market.shortTitle || market.title}
+        </h3>
+      </div>
+      
+      {/* --- UPDATED: Price Display (Conditional Rendering) --- */}
+      <div className="flex items-center justify-between space-x-4 mt-auto"> {/* Added mt-auto to push to bottom */}
+        {/* Case 1: Outcomes exist */}
+        {topOutcome ? (
+          <>
+            {/* Top Outcome (Always show) */}
+            <div className="flex items-center space-x-2">
+              <span className="text-3xl font-bold text-blue-400">
+                {(topOutcome.price * 100).toFixed(0)}¢
+              </span>
+              <span className="text-sm text-gray-400 truncate max-w-[80px]">{topOutcome.name}</span>
+            </div>
+
+            {/* Second Outcome (Show if binary or if it exists and is not binary) */}
+            {isBinary && secondOutcome && (
+              <div className="flex items-center space-x-2">
+                <span className="text-3xl font-bold text-red-400">
+                  {(secondOutcome.price * 100).toFixed(0)}¢
+                </span>
+                <span className="text-sm text-gray-400">{secondOutcome.name}</span>
+              </div>
+            )}
+
+            {!isBinary && secondOutcome && (
+              <div className="flex items-center space-x-2">
+                <span className="text-3xl font-bold text-gray-500">
+                  {(secondOutcome.price * 100).toFixed(0)}¢
+                </span>
+                <span className="text-sm text-gray-400 truncate max-w-[80px]">{secondOutcome.name}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          /* Case 2: No outcomes */
+          <div className="flex items-center justify-center w-full">
+            <span className="text-sm text-gray-500">No outcome data.</span>
           </div>
         )}
       </div>
