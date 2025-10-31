@@ -2,7 +2,7 @@
  * Tanner.xyz App
  * Aggregated Prediction Market Frontend
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // --- NEW: Web3 Constants (NEEDS TO BE REPLACED) ---
 // This is the address for USDC on the Sepolia testnet.
@@ -70,14 +70,16 @@ export const fetchMarkets = async (setToastMessage) => {
 
     // Fallback to mock data (since we are in a limited environment)
     const mockData = [
-      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000 },
-      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000 },
-      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', shortTitle: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000 },
-      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', shortTitle: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000 },
-      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', shortTitle: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000 },
-      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', shortTitle: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000 },
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000, history: [] },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000, history: [] },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', shortTitle: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000, history: [] },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', shortTitle: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000, history: [] },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', shortTitle: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000, history: [] },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', shortTitle: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000, history: [] },
     ];
-    return mockData;
+    // Simulate history for mock data
+    const addHistory = (market) => ({ ...market, history: generateChartData() });
+    return mockData.map(addHistory);
   }
 };
 
@@ -155,31 +157,24 @@ const getLogo = (platform) => {
   }
 };
 
-// --- NEW: Mock Price Chart Data Generator ---
+// --- NEW: Mock Price Chart Data Generator (USED AS FALLBACK) ---
 const generateChartData = () => {
   let data = [];
   let price = 0.5; // Starting price
-  const startTime = new Date().getTime() - (100 * 30000); // 100 data points, 30 sec apart
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
+  const dataPoints = 168; // One point per hour for 7 days (7 * 24)
+  const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
 
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < dataPoints; i++) {
     const change = (Math.random() - 0.5) * 0.02;
     price += change;
     if (price > 0.99) price = 0.99;
     if (price < 0.01) price = 0.01;
-    data.push({ time: startTime + (i * 30000), price: price });
+    data.push({ time: sevenDaysAgo + (i * timeStep), value: price });
   }
+  data[data.length - 1] = { time: now, value: price }; // Ensure last point is now
   return data;
-};
-
-// --- NEW: Mock Chart Data Fetcher ---
-const fetchChartData = (marketId, platform) => {
-    console.log(`Simulating fetch for ${platform} chart data (Market ID: ${marketId})...`);
-    return new Promise(resolve => {
-        setTimeout(() => {
-            const chartData = generateChartData(platform);
-            resolve(chartData);
-        }, 1200); // Simulated network delay
-    });
 };
 
 
@@ -285,48 +280,91 @@ const RabbyIcon = () => (
 // START OF COMPONENTS (Defined before App)
 // ====================================================================
 
-// --- NEW: Simulated Price Chart Component ---
-function SimulatedPriceChart({ data }) {
-  // A simple SVG chart. A real app would use a library like lightweight-charts.
-  const svgWidth = 500;
-  const svgHeight = 300;
+// --- *** NEW: HISTORICAL CHART COMPONENT *** ---
+// This replaces the old SimulatedPriceChart
+function HistoricalChart({ data }) {
+  const chartContainerRef = useRef(null);
 
+  useEffect(() => {
+    // Check if the charting library is loaded
+    if (!window.LightweightCharts) {
+      console.error("LightweightCharts library is not loaded.");
+      return;
+    }
+    
+    // Ensure we have data and a ref
+    if (!data || data.length === 0 || !chartContainerRef.current) {
+      return;
+    }
+
+    const chart = window.LightweightCharts.createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: 300, // Fixed height for the chart area
+      layout: {
+        background: { color: '#030712' }, // gray-950
+        textColor: '#D1D5DB', // gray-300
+      },
+      grid: {
+        vertLines: { color: '#1F2937' }, // gray-800
+        horzLines: { color: '#1F2937' }, // gray-800
+      },
+      priceScale: {
+        borderColor: '#374151', // gray-700
+        // Format price as percentage (e.g., "52¢")
+        formatter: (price) => `${(price * 100).toFixed(0)}¢`,
+        autoScale: false, // Disable autoScale
+        // Force the Y-axis to always show 0¢ to 100¢
+        minValue: 0,
+        maxValue: 1,
+      },
+      timeScale: {
+        borderColor: '#374151', // gray-700
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      crosshair: {
+        mode: window.LightweightCharts.CrosshairMode.Normal,
+      },
+    });
+
+    const lineSeries = chart.addLineSeries({
+      color: '#3B82F6', // blue-600
+      lineWidth: 2,
+    });
+
+    lineSeries.setData(data);
+    
+    // Fit the chart to the data
+    chart.timeScale().fitContent();
+
+    // Handle chart resizing
+    const handleResize = () => {
+      chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    // Cleanup on component unmount
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      chart.remove();
+    };
+
+  }, [data]); // Re-run effect if data changes
+
+  // If no data, show a message
   if (!data || data.length === 0) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-gray-500">
-        No chart data available.
+      <div ref={chartContainerRef} className="w-full h-[300px] flex items-center justify-center text-gray-500">
+        No historical data available for this market.
       </div>
     );
   }
-
-  const prices = data.map(d => d.price);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const priceRange = maxPrice - minPrice || 1; // Prevent division by zero
-
-  // Create path string
-  const path = data
-    .map((d, i) => {
-      if (typeof d.price !== 'number' || typeof d.time !== 'number' || isNaN(d.price) || isNaN(d.time)) return ''; // Skip bad data
-      const x = (i / (data.length - 1)) * svgWidth;
-      const y = svgHeight - ((d.price - minPrice) / priceRange) * svgHeight;
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-
-  return (
-    <div className="w-full h-full flex items-center justify-center">
-      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full">
-        <path
-          d={path}
-          fill="none"
-          stroke="#3B82F6" // Blue-600
-          strokeWidth="2"
-        />
-      </svg>
-    </div>
-  );
+  
+  // Render the chart container
+  return <div ref={chartContainerRef} className="w-full h-[300px]" />;
 }
+
 
 // --- Simulated Order Book Component ---
 function SimulatedOrderBook({ onPriceClick }) {
@@ -644,13 +682,9 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
 
 // --- NEW: Market Detail Page Component ---
 function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWallet, onSideChange, tradeSide, setToastMessage, handleAddNotification, portfolioBalance }) {
-  const [chartData, setChartData] = useState([]); // Generate mock chart data
-
-  useEffect(() => {
-    // Generate new chart data when the market changes
-    setChartData(generateChartData());
-  }, [market]);
-
+  
+  // This state is no longer needed, as the new chart component is self-contained.
+  // const [chartData, setChartData] = useState([]);
 
   if (!market) {
     return (
@@ -685,9 +719,11 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
         {/* Left Column */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Price Chart */}
-          <div className="bg-gray-950 border border-gray-800 rounded-lg p-6 h-96">
-            <h2 className="text-xl font-semibold text-white mb-4">Possibility Graph</h2>
-            <SimulatedPriceChart data={chartData} />
+          <div className="bg-gray-950 border border-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">7-Day Probability Chart</h2>
+            {/* --- *** THIS IS THE KEY CHANGE *** --- */}
+            {/* We now pass the market.history data from the backend to our new chart */}
+            <HistoricalChart data={market.history} />
           </div>
 
           {/* Market Rules/Details */}
@@ -712,7 +748,7 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
             onSubmit={onSubmit}
             userAddress={userAddress}
             onConnectWallet={onConnectWallet}
-            // --- FIX: Pass missing props down ---
+            // --- FIX: Pass state down for validation ---
             setToastMessage={setToastMessage}
             handleAddNotification={handleAddNotification}
             portfolioBalance={portfolioBalance}
