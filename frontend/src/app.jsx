@@ -67,12 +67,12 @@ export const fetchMarkets = async (setToastMessage) => {
 
     // Fallback to mock data (since we are in a limited environment)
     const mockData = [
-      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000 },
-      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000 },
-      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000 },
-      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000 },
-      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000 },
-      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000 },
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48, volume_24h: 500000 },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53, volume_24h: 400000 },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', shortTitle: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69, volume_24h: 300000 },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', shortTitle: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22, volume_24h: 200000 },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', shortTitle: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85, volume_24h: 100000 },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', shortTitle: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40, volume_24h: 50000 },
     ];
     return mockData;
   }
@@ -172,10 +172,10 @@ const generateChartData = () => {
 const fetchChartData = (marketId, platform) => {
     console.log(`Simulating fetch for ${platform} chart data (Market ID: ${marketId})...`);
     return new Promise(resolve => {
-      setTimeout(() => {
-        const chartData = generateChartData(platform);
-        resolve(chartData);
-      }, 1200); // Simulated network delay
+        setTimeout(() => {
+            const chartData = generateChartData(platform);
+            resolve(chartData);
+        }, 1200); // Simulated network delay
     });
 };
 
@@ -266,7 +266,7 @@ const MetamaskIcon = () => (
 
 const OKXIcon = () => (
   <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <path d="M22.288 14.43v-4.86L16.8 4.08h-4.86l-2.71 2.71v.006H4.37v4.86l5.49 5.49h4.86l2.71-2.71V14.43h4.858zm-4.86-2.43h-2.43v-2.43h2.43v2.43zm-4.86-4.86h-2.43V4.71h2.43v2.43zm-2.43 4.86H7.71v-2.43h2.43v2.43zm2.43 4.86h2.43v2.43h-2.43v-2.43zm2.43-2.43v2.43h-2.43v-2.43h-2.43zm4.86 4.86h-2.43v2.43h2.43v-2.43zm-2.43-4.86H16.8v-2.43h-2.43v2.43zm-4.86 2.43v-2.43H7.71v2.43h2.43zm4.86 0h2.43v2.43h-2.43v-2.43zM12.54 9.57H9.57V7.14h2.97v2.43zm2.43 0h2.43v2.43h-2.43V9.57zM9.57 12h2.97v2.43H9.57V12zm4.86 0v2.43h-2.43V12h2.43zM1.71 9.57h2.43v4.86H1.71V9.57zm18.15 0h2.43v4.86h-2.43V9.57zM7.14 1.71h4.86v2.43H7.14V1.71zm9.72 0h-2.43v2.43h2.43V1.71zm-4.86 18.15h-4.86v2.43h4.86v-2.43z"/>
+    <path d="M22.288 14.43v-4.86L16.8 4.08h-4.86l-2.71 2.71v.006H4.37v4.86l5.49 5.49h4.86l2.71-2.71V14.43h4.858zm-4.86-2.43h-2.43v-2.43h2.43v2.43zm-4.86-4.86h-2.43V4.71h2.43v2.43zm-2.43 4.86H7.71v-2.43h2.43v2.43zm2.43 4.86h2.43v2.43h-2.43v-2.43zm2.43-2.43v2.43h2.43v-2.43h-2.43zm4.86 4.86h-2.43v2.43h2.43v-2.43zm-2.43-4.86H16.8v-2.43h-2.43v2.43zm-4.86 2.43v-2.43H7.71v2.43h2.43zm4.86 0h2.43v2.43h-2.43v-2.43zM12.54 9.57H9.57V7.14h2.97v2.43zm2.43 0h2.43v2.43h-2.43V9.57zM9.57 12h2.97v2.43H9.57V12zm4.86 0v2.43h-2.43V12h2.43zM1.71 9.57h2.43v4.86H1.71V9.57zm18.15 0h2.43v4.86h-2.43V9.57zM7.14 1.71h4.86v2.43H7.14V1.71zm9.72 0h-2.43v2.43h2.43V1.71zm-4.86 18.15h-4.86v2.43h4.86v-2.43z"/>
   </svg>
 );
 
@@ -401,8 +401,8 @@ function SimulatedOrderBook({ onPriceClick }) {
 function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
   const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
-  const [limitPrice, setLimitPrice] = useState('');    // Price for Limit
-  const [limitShares, setLimitShares] = useState('');  // Amount in Shares for Limit
+  const [limitPrice, setLimitPrice] = useState('');     // Price for Limit
+  const [limitShares, setLimitShares] = useState('');   // Amount in Shares for Limit
 
   useEffect(() => {
     setTradeType('Market');
@@ -652,7 +652,7 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
   if (!market) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-          <p className="text-gray-400">Market data not found.</p>
+        <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
@@ -1171,8 +1171,8 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
 
   const walletOptions = [
     { name: 'Metamask', icon: <MetamaskIcon /> }, // UPDATED
-    { name: 'OKX', icon: <OKXIcon /> },      // UPDATED
-    { name: 'Rabby', icon: <RabbyIcon /> },      // UPDATED (Fixed typo)
+    { name: 'OKX', icon: <OKXIcon /> },     // UPDATED
+    { name: 'Rabby', icon: <RabbyIcon /> },     // UPDATED (Fixed typo)
   ];
 
   return (
@@ -1550,7 +1550,8 @@ function MarketCard({ market, onMarketClick }) {
       <div className="text-xs text-gray-500 mb-1">
         Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
       </div>
-      <h3 className="text-lg font-semibold text-white mb-4 h-20">{market.title}</h3>
+      {/* --- UPDATED TO USE shortTitle --- */}
+      <h3 className="text-lg font-semibold text-white mb-4 h-20">{market.shortTitle || market.title}</h3>
       <div className="flex items-center justify-between space-x-4">
         <div className="flex items-center space-x-2">
           <span className="text-3xl font-bold text-green-400">{yesPrice}¢</span>
@@ -1572,7 +1573,8 @@ function MarketCard({ market, onMarketClick }) {
 function MarketListPage({ markets, onMarketClick }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  const categories = ['All', 'Politics', 'Crypto', 'Sports', 'Economics', 'Other']; // Added Economics
+  // --- UPDATED CATEGORIES ---
+  const categories = ['All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
 
   // Filter based on search and category
   const filteredMarkets = markets
@@ -1828,7 +1830,7 @@ export default function App() {
     setWalletState('idle');
     setPortfolioOnboardingState('prompt');
     setProvider(null); // <-- NEW
-    setSigner(null);      // <-- NEW
+    setSigner(null);     // <-- NEW
     if (currentPage === 'portfolio') {
       setCurrentPage('markets');
     }
@@ -2143,7 +2145,7 @@ export default function App() {
             openOrders={openOrders}
             onCancelOrder={handleCancelOrder}
             onDeposit={handleOpenDepositModal}      // <-- UPDATED
-            onWithdraw={handleOpenWithdrawModal}     // <-- UPDATED
+            onWithdraw={handleOpenWithdrawModal}    // <-- UPDATED
             onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal} // <-- NEW
           />
