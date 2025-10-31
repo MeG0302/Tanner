@@ -150,7 +150,7 @@ async function fetchPolymarketData() {
 
       if (!Array.isArray(marketArray)) {
         console.error('Invalid Polymarket response structure. Expected array.', data);
-        throw new Error('Invalid Polymarket structure');
+        throw new Error('Invalid Polymymarket structure');
       }
       return marketArray.map(normalizePolymarket).filter(m => m !== null).slice(0, 25);
     }
