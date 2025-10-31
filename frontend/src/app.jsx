@@ -13,8 +13,17 @@ const USDC_ABI = [
   "function transfer(address to, uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
   // Added for withdrawal function (if you implement a Smart Wallet contract)
-  "function withdrawUSDC(uint256 amount) external" 
+  "function withdrawUSDC(uint256 amount) external"
 ];
+
+// --- NEW: Universal Unique ID Generator ---
+// This function replaces 'crypto.randomUUID()' to ensure compatibility
+// with all browsers and non-secure (http://) contexts.
+function generateUniqueId() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+  );
+}
 
 
 // --- API LOGIC (Moved from api.js) ---
@@ -22,10 +31,11 @@ export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
   // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
-  const API_URL = 'http://92.246.141.205:3001/api/markets'; 
+  // --- FIX: Reverted to absolute URL for the VPS backend ---
+  const API_URL = 'http://92.246.141.205:3001/api/markets';
   
   // Added a brief delay to prevent spamming failed requests
-  await new Promise(resolve => setTimeout(resolve, 500)); 
+  await new Promise(resolve => setTimeout(resolve, 500));
 
   try {
     const response = await fetch(API_URL);
@@ -58,9 +68,9 @@ export const fetchMarkets = async (setToastMessage) => {
 
 // --- Mock Portfolio Data (for initial state) ---
 const initialPositions = [
-  { id: crypto.randomUUID(), marketId: 1, title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
-  { id: crypto.randomUUID(), marketId: 3, title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
-  { id: crypto.randomUUID(), marketId: 5, title: 'Will the LA Lakers win the 2026 NBA Championship?', side: 'NO', shares: 58.82, avgPrice: 0.85, currentValue: 50, pnl: 0 },
+  { id: generateUniqueId(), marketId: 1, title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
+  { id: generateUniqueId(), marketId: 3, title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
+  { id: generateUniqueId(), marketId: 5, title: 'Will the LA Lakers win the 2026 NBA Championship?', side: 'NO', shares: 58.82, avgPrice: 0.85, currentValue: 50, pnl: 0 },
 ];
 
 const initialPortfolioBalance = {
@@ -268,17 +278,28 @@ function SimulatedPriceChart({ data }) {
   const svgWidth = 500;
   const svgHeight = 300;
 
+  if (!data || data.length === 0) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-gray-500">
+        No chart data available.
+      </div>
+    );
+  }
+
   const prices = data.map(d => d.price);
   const minPrice = Math.min(...prices);
   const maxPrice = Math.max(...prices);
   const priceRange = maxPrice - minPrice || 1; // Prevent division by zero
 
   // Create path string
-  const path = data.map((d, i) => {
-    const x = (i / (data.length - 1)) * svgWidth;
-    const y = svgHeight - ((d.price - minPrice) / priceRange) * svgHeight;
-    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-  }).join(' ');
+  const path = data
+    .map((d, i) => {
+      if (typeof d.price !== 'number' || typeof d.time !== 'number' || isNaN(d.price) || isNaN(d.time)) return ''; // Skip bad data
+      const x = (i / (data.length - 1)) * svgWidth;
+      const y = svgHeight - ((d.price - minPrice) / priceRange) * svgHeight;
+      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(' ');
 
   return (
     <div className="w-full h-full flex items-center justify-center">
@@ -367,16 +388,20 @@ function SimulatedOrderBook({ onPriceClick }) {
 
 
 // --- RENAMED: TradePanel Component (was TradeConfirmModal) ---
-function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet }) {
+// --- FIX: Added missing props for validation ---
+function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConnectWallet, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
   const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
-  const [limitPrice, setLimitPrice] = useState('');   // Price for Limit
+  const [limitPrice, setLimitPrice] = useState('');    // Price for Limit
   const [limitShares, setLimitShares] = useState('');  // Amount in Shares for Limit
 
   useEffect(() => {
       setTradeType('Market');
       setMarketAmount('');
-      setLimitPrice(side === 'YES' ? market?.yes.toFixed(2) : market?.no.toFixed(2)); // Pre-fill limit price
+      // --- FIX: Add check for market existence ---
+      if (market) {
+        setLimitPrice(side === 'YES' ? market.yes.toFixed(2) : market.no.toFixed(2)); // Pre-fill limit price
+      }
       setLimitShares('');
   }, [market, side]); // Reset when market or side changes
 
@@ -398,20 +423,39 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
         return;
     }
 
-    // This remains simulated for now, as it's complex.
-    // A real implementation would call our smart wallet, not just USDC.
-    const { tradeType, amount, shares, limitPrice } = tradeDetails;
-
-    if (portfolioBalance.totalUSDC < amount) {
+    // --- FIX: This is where the simulation logic was, it needs to call onSubmit
+    // We package up the trade details for the main App component's 'handleTradeSubmit'
+    let tradeDetails = {};
+    if (tradeType === 'Market') {
+      tradeDetails = {
+        tradeType: 'Market',
+        amount: parseFloat(marketAmount),
+        shares: parseFloat(marketPayout),
+        limitPrice: null, // Market order doesn't have a limit price
+      };
+    } else {
+      tradeDetails = {
+        tradeType: 'Limit',
+        amount: parseFloat(limitCost), // Use the calculated cost
+        shares: parseFloat(limitShares),
+        limitPrice: parseFloat(limitPrice),
+      };
+    }
+    
+    // --- FIX: Validation moved from App.js to TradePanel ---
+    if (!portfolioBalance || typeof portfolioBalance.totalUSDC !== 'number') {
+        handleAddNotification("Portfolio balance not loaded.");
+        setToastMessage("Portfolio balance not loaded.");
+        return;
+    }
+    if (portfolioBalance.totalUSDC < tradeDetails.amount) {
       handleAddNotification("Trade failed: Insufficient funds.");
       setToastMessage("Insufficient USDC balance!");
       return;
     }
     
-    // Simulate trade logic (copied into App component)
-    onSubmit({
-        tradeType, amount, shares, limitPrice
-    });
+    // Call the main onSubmit handler (which is 'handleTradeSubmit' in App)
+    onSubmit(tradeDetails);
     
     // Clear inputs after submission
     if (tradeType === 'Market') {
@@ -582,7 +626,8 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
 }
 
 // --- NEW: Market Detail Page Component ---
-function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWallet, onSideChange, tradeSide }) {
+// --- FIX: Pass new props to TradePanel ---
+function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWallet, onSideChange, tradeSide, setToastMessage, handleAddNotification, portfolioBalance }) {
   const [chartData, setChartData] = useState([]); // Generate mock chart data
 
   useEffect(() => {
@@ -651,6 +696,10 @@ function MarketDetailPage({ market, onBack, onSubmit, userAddress, onConnectWall
             onSubmit={onSubmit}
             userAddress={userAddress}
             onConnectWallet={onConnectWallet}
+            // --- FIX: Pass missing props down ---
+            setToastMessage={setToastMessage}
+            handleAddNotification={handleAddNotification}
+            portfolioBalance={portfolioBalance}
           />
         </div>
       </div>
@@ -696,7 +745,7 @@ function PositionRow({ position, onClosePosition }) { // Added onClosePosition p
       <td className="px-4 py-4 text-sm text-gray-300">${position.avgPrice.toFixed(2)}</td>
       <td className={`px-4 py-4 text-sm text-white font-medium`}>${position.currentValue.toFixed(2)}</td>
       <td className={`px-4 py-4 text-sm font-medium ${pnlClass}`}>
-        {position.pnl >= 0 ? '+' : ''}${position.pnl.toFixed(2)}
+        {position.pnl >= 0 ? '+' : ''}{position.pnl.toFixed(2)}
       </td>
       {/* --- NEW: Close Button --- */}
       <td className="px-4 py-4 text-sm text-center">
@@ -795,7 +844,7 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
         <div className={`bg-gray-950 border border-gray-800 rounded-lg p-6`}>
           <h3 className="text-sm font-medium text-gray-400 mb-2">Total P&L</h3>
           <p className={`text-3xl font-semibold ${totalPnlColor}`}>
-            {balance.totalPnl >= 0 ? '+' : ''}${balance.totalPnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            {balance.totalPnl >= 0 ? '+' : ''}{balance.totalPnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
           </p>
         </div>
       </div>
@@ -815,29 +864,29 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
         {/* FIX: Removed whitespace causing DOM warning */}
         <table className="w-full table-auto"><thead className="border-b border-gray-800">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Side</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Shares</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Avg. Price</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Current Value</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">P&L</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Action</th> {/* NEW Column */}
+          </tr>
+        </thead><tbody className="divide-y divide-gray-800">
+          {positions.map(pos => (
+            <PositionRow
+              key={pos.id}
+              position={pos}
+              onClosePosition={onClosePosition} // Pass handler
+            />
+          ))}
+          {positions.length === 0 && (
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Side</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Shares</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Avg. Price</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Current Value</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">P&L</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Action</th> {/* NEW Column */}
+              <td colSpan="7" className="text-center py-8 text-gray-500">You have no open positions.</td> {/* Updated colSpan */}
             </tr>
-          </thead><tbody className="divide-y divide-gray-800">
-            {positions.map(pos => (
-              <PositionRow
-                key={pos.id}
-                position={pos}
-                onClosePosition={onClosePosition} // Pass handler
-              />
-            ))}
-            {positions.length === 0 && (
-              <tr>
-                <td colSpan="7" className="text-center py-8 text-gray-500">You have no open positions.</td> {/* Updated colSpan */}
-              </tr>
-            )}
-          </tbody></table>
+          )}
+        </tbody></table>
       </div>
 
       {/* --- NEW: Open Limit Orders Table --- */}
@@ -845,25 +894,25 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
       <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
         {/* FIX: Removed whitespace causing DOM warning */}
         <table className="w-full table-auto"><thead className="border-b border-gray-800">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Platform</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Side</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Price</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Shares</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Cost</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase"></th>
+          </tr>
+        </thead><tbody className="divide-y divide-gray-800">
+          {openOrders.map(order => (
+            <OpenOrderRow key={order.id} order={order} onCancel={onCancelOrder} />
+          ))}
+          {openOrders.length === 0 && (
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Market</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Platform</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Side</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Price</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Shares</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Cost</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase"></th>
+              <td colSpan="7" className="text-center py-8 text-gray-500">You have no open limit orders.</td>
             </tr>
-          </thead><tbody className="divide-y divide-gray-800">
-            {openOrders.map(order => (
-              <OpenOrderRow key={order.id} order={order} onCancel={handleCancelOrder} />
-            ))}
-            {openOrders.length === 0 && (
-              <tr>
-                <td colSpan="7" className="text-center py-8 text-gray-500">You have no open limit orders.</td>
-              </tr>
-            )}
-          </tbody></table>
+          )}
+        </tbody></table>
       </div>
     </main>
   );
@@ -970,7 +1019,7 @@ function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
                 <td className="px-4 py-4 text-sm font-bold text-blue-400">{trader.rank}</td>
                 <td className="px-4 py-4 text-sm text-white">{trader.user}</td>
                 <td className={`px-4 py-4 text-sm font-medium ${trader.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {trader.pnl >= 0 ? '+' : ''}${trader.pnl.toFixed(2)}
+                  {trader.pnl >= 0 ? '+' : ''}{trader.pnl.toFixed(2)}
                 </td>
                 <td className="px-4 py-4 text-sm text-gray-300">${trader.volume.toLocaleString()}</td>
               </tr>
@@ -1112,7 +1161,7 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
   const walletOptions = [
     { name: 'Metamask', icon: <MetamaskIcon /> }, // UPDATED
     { name: 'OKX', icon: <OKXIcon /> },      // UPDATED
-    { name: 'Rabby', icon: <RabbyIcon /> },    // UPDATED (Fixed typo)
+    { name: 'Rabby', icon: <RabbyIcon /> },     // UPDATED (Fixed typo)
   ];
 
   return (
@@ -1688,7 +1737,7 @@ export default function App() {
   const handleAddNotification = (message) => {
     setNotifications(prev => [
       ...prev,
-      { id: crypto.randomUUID(), message, time: Date.now() }
+      { id: generateUniqueId(), message, time: Date.now() }
     ]);
   };
 
@@ -1749,7 +1798,7 @@ export default function App() {
     setWalletState('idle');
     setPortfolioOnboardingState('prompt');
     setProvider(null); // <-- NEW
-    setSigner(null);   // <-- NEW
+    setSigner(null);     // <-- NEW
     if (currentPage === 'portfolio') {
       setCurrentPage('markets');
     }
@@ -1789,11 +1838,12 @@ export default function App() {
     
     const { tradeType, amount, shares, limitPrice } = tradeDetails;
 
-    if (portfolioBalance.totalUSDC < amount) {
-      handleAddNotification("Trade failed: Insufficient funds.");
-      setToastMessage("Insufficient USDC balance!");
-      return;
-    }
+    // Validation is now done in TradePanel before this is called
+    // if (portfolioBalance.totalUSDC < amount) {
+    //   handleAddNotification("Trade failed: Insufficient funds.");
+    //   setToastMessage("Insufficient USDC balance!");
+    //   return;
+    // }
 
     // Update balance
     setPortfolioBalance(prev => ({
@@ -1816,7 +1866,7 @@ export default function App() {
         } else {
           // Add new position
           const newPos = {
-            id: crypto.randomUUID(),
+            id: generateUniqueId(),
             marketId: selectedMarket.id,
             title: selectedMarket.title,
             side: tradeSide,
@@ -1833,7 +1883,7 @@ export default function App() {
     } else {
       // Add a new limit order
       const newOrder = {
-        id: crypto.randomUUID(),
+        id: generateUniqueId(),
         marketId: selectedMarket.id,
         marketTitle: selectedMarket.title,
         platform: selectedMarket.platform,
@@ -2017,7 +2067,7 @@ export default function App() {
       // Limit Close: Add a new limit order for the *opposite* side.
       const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
       const limitOrder = {
-          id: crypto.randomUUID(),
+          id: generateUniqueId(),
           marketId: position.marketId,
           marketTitle: position.title,
           platform: market.platform,
@@ -2049,6 +2099,10 @@ export default function App() {
             onConnectWallet={handleConnectWallet}
             onSideChange={setTradeSide}
             tradeSide={tradeSide}
+            // --- FIX: Pass state down for validation ---
+            setToastMessage={setToastMessage}
+            handleAddNotification={handleAddNotification}
+            portfolioBalance={portfolioBalance}
           />
         );
       case 'portfolio':
@@ -2066,7 +2120,7 @@ export default function App() {
             openOrders={openOrders}
             onCancelOrder={handleCancelOrder}
             onDeposit={handleOpenDepositModal}     // <-- UPDATED
-            onWithdraw={handleOpenWithdrawModal}   // <-- UPDATED
+            onWithdraw={handleOpenWithdrawModal}    // <-- UPDATED
             onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal} // <-- NEW
           />
@@ -2151,3 +2205,4 @@ export default function App() {
     </div>
   );
 }
+
