@@ -76,7 +76,7 @@ function nativeFetch(url) {
 }
 
 // ====================================================================
-// NEW: OPTIMIZATION HELPERS
+// NEW: OPTIMIZATION & CHART HELPERS
 // ====================================================================
 
 /**
@@ -131,6 +131,40 @@ function getAdvancedCategory(title) {
 
   // Fallback
   return 'Other';
+}
+
+/**
+ * --- NEW: CHART FUNCTION ---
+ * Generates a simple array of historical price data for charts.
+ * @param {number} currentPrice The market's current 'yes' price (0.0 to 1.0).
+ * @returns {Array<Object>} An array of data points [{ time, value }].
+ */
+function generateMarketHistory(currentPrice) {
+  let data = [];
+  // Start the simulation at a price *near* the current price for realism
+  let price = currentPrice - (Math.random() - 0.5) * 0.1;
+  
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
+  const dataPoints = 168; // One point per hour for 7 days (7 * 24)
+  const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
+
+  for (let i = 0; i < dataPoints; i++) {
+    const change = (Math.random() - 0.5) * 0.02; // Small random change per hour
+    price += change;
+    if (price > 0.99) price = 0.99; // Cap at 99c
+    if (price < 0.01) price = 0.01; // Floor at 1c
+    
+    // Calculate timestamp for this data point
+    const time = sevenDaysAgo + (i * timeStep);
+    
+    data.push({ time: time, value: price });
+  }
+  
+  // Ensure the very last point is *exactly* the current price
+  data[data.length - 1] = { time: now, value: currentPrice };
+
+  return data;
 }
 
 // ====================================================================
@@ -194,27 +228,7 @@ async function fetchKalshiData() {
  */
 async function fetchLimitlessData() {
   // NOTE: TEMPORARILY DISABLED due to persistent non-JSON responses.
-  // Uncomment the code below if a reliable Limitless API is found.
   return []; 
-  /*
-  try {
-    const data = await nativeFetch(API_ENDPOINTS.LIMITLESS);
-
-    if (!data || !Array.isArray(data)) {
-        console.error('Invalid Limitless structure. Expected array.', data);
-        throw new Error('Invalid Limitless structure');
-    }
-
-    return data
-      .map(normalizeLimitless)
-      .filter(m => m !== null)
-      .sort((a, b) => b.volume_24h - a.volume_24h)
-      .slice(0, 25);
-  } catch (error) {
-    console.error('Failed to fetch from Limitless:', error.message);
-    return [];
-  }
-  */
 }
 
 // ====================================================================
@@ -226,30 +240,27 @@ async function fetchLimitlessData() {
  */
 function normalizePolymarket(market) {
   try {
-    // Polymarket V2 structure has tokens in an array
     const yesToken = market.tokens.find(t => t.outcome === 'Yes');
     const noToken = market.tokens.find(t => t.outcome === 'No');
     
-    // Fallback for V1 (price is directly on market object)
     const yesPrice = parseFloat(yesToken?.price || market.lastTradePrice || 0.5);
     const noPrice = parseFloat(noToken?.price || (1 - yesPrice));
 
     if (!market.question) return null; // Skip if no title/question
 
-    // --- OPTIMIZATION APPLIED ---
     const fullTitle = market.question;
 
     return {
       id: `poly-${market.id}`,
       title: fullTitle,
-      shortTitle: optimizeTitle(fullTitle), // <-- NEW
+      shortTitle: optimizeTitle(fullTitle),
       platform: 'Polymarket',
-      category: getAdvancedCategory(fullTitle), // <-- UPDATED
+      category: getAdvancedCategory(fullTitle),
       yes: yesPrice,
       no: noPrice,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
+      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
     };
-    // --- END OPTIMIZATION ---
 
   } catch (err) {
     console.error("Error normalizing Polymarket market:", err.message, market);
@@ -262,26 +273,23 @@ function normalizePolymarket(market) {
  */
 function normalizeKalshi(market) {
   try {
-    // Kalshi returns prices in cents (0-100) directly on the market object
-    const yesPriceCents = market.yes_ask || market.yes_bid || 50; // Use ask/bid or default
-    const noPriceCents = market.no_ask || market.no_bid || 50;   // Use ask/bid or default
+    const yesPriceCents = market.yes_ask || market.yes_bid || 50;
+    const noPriceCents = market.no_ask || market.no_bid || 50;
+    const yesPrice = yesPriceCents / 100.0; // Convert to 0-1.0
     
-    // --- OPTIMIZATION APPLIED ---
-    // Kalshi's subtitle is often the better, shorter question
     const fullTitle = market.subtitle || market.title; 
 
     return {
       id: `kalshi-${market.ticker_name || market.ticker}`,
       title: fullTitle,
-      shortTitle: optimizeTitle(fullTitle), // <-- NEW
+      shortTitle: optimizeTitle(fullTitle),
       platform: 'Kalshi',
-      category: getAdvancedCategory(fullTitle), // <-- UPDATED
-      // Convert cents to 0-1.0 format
-      yes: yesPriceCents / 100.0,
+      category: getAdvancedCategory(fullTitle),
+      yes: yesPrice,
       no: noPriceCents / 100.0,
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
+      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
     };
-    // --- END OPTIMIZATION ---
 
   } catch (err) {
     console.error("Error normalizing Kalshi market:", err.message, market);
@@ -293,16 +301,18 @@ function normalizeKalshi(market) {
  * Converts a Limitless market object to our standard format.
  */
 function normalizeLimitless(market) {
+  // This function is currently disabled
   try {
-    // This function is currently disabled in fetchLimitlessData()
+    const yesPrice = parseFloat(market.yes_price || market.price || 0.5);
     return {
       id: `limitless-${market.id || market.ticker}`,
       title: market.title || market.name,
       platform: 'Limitless',
       category: market.category || 'Crypto',
-      yes: parseFloat(market.yes_price || market.price || 0.5),
+      yes: yesPrice,
       no: parseFloat(market.no_price || (1 - (market.price || 0.5))),
       volume_24h: parseFloat(market.volume_24h || market.volume) || 0,
+      history: generateMarketHistory(yesPrice), // <-- NEW: ADDED HISTORY
     };
   } catch (err) {
     console.error("Error normalizing Limitless market:", err.message, market);
