@@ -1903,7 +1903,8 @@ export default function App() {
   // --- State ---
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeNav, setActiveNav] = useState('markets'); // FIX: Replaced currentPage
+  // --- FIX: Replaced currentPage with activeNav ---
+  const [activeNav, setActiveNav] = useState('markets'); 
   
   // --- Trading State ---
   const [selectedMarket, setSelectedMarket] = useState(null); 
