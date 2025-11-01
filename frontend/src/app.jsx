@@ -4,9 +4,9 @@
  * --- V4 (Web3, Firestore, Simulated Live Data) ---
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, getDocs, where, deleteDoc } from 'firebase/firestore';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js';
+import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, getDocs, where, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
 
 // --- Global Variables (Provided by Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -925,7 +925,7 @@ function MarketDetailPage({
               side={tradeSide}
               onSubmit={onSubmit}
               userAddress={userAddress}
-              onConnectWallet={onConnectWallet}
+              onConnectWallet={handleConnectWallet}
               setToastMessage={setToastMessage}
               handleAddNotification={handleAddNotification}
               portfolioBalance={portfolioBalance}
@@ -2093,7 +2093,7 @@ export default function App() {
                 'balance.totalUSDC': formattedSmartBalance
             });
 
-            handleAddNotification(`Real balance updated: ${formattedSmartBalance.toFixed(2)} USDC.`);
+            handleAddNotification(`Real balance updated: ${formattedSmartBalance.toFixed(2)} USDC`);
             setToastMessage("Balance Synced with Blockchain");
 
         } catch (error) {
@@ -2276,8 +2276,6 @@ export default function App() {
     const { tradeType, amount, shares, limitPrice } = tradeDetails;
     
     // ** Simulating Web3 interaction for Market Orders **
-    // In a real app, this would be a contract call that returns shares/a transaction receipt.
-    // Since this is a mock, we update Firestore directly.
 
     let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC - amount };
     let newPositions = [...positions];
