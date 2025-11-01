@@ -51,8 +51,8 @@ function generateUniqueId() {
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // --- FIX: Using HTTP to prevent ERR_SSL_PROTOCOL_ERROR, still prone to Mixed Content Block ---
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  // --- FIX: Using relative path to use the Vite proxy ---
+  const API_URL = '/api/markets';
   // --- END OF FIX ---
 
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -69,12 +69,12 @@ export const fetchMarkets = async (setToastMessage) => {
     // --- START ERROR LOGGING BLOCK ---
     console.log("------------------------------------------------");
     console.error("BACKEND FETCH FAILED: Failed to fetch", error);
-    if (error.message.includes('Failed to fetch') || error.message.includes('SSL_PROTOCOL_ERROR')) {
+    if (error.message.includes('Failed to fetch')) {
         console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${API_URL}`);
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The browser is blocking the insecure HTTP request (Mixed Content Policy).");
+        console.error("3. The Vite proxy config in vite.config.js is incorrect.");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
@@ -649,153 +649,153 @@ function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddr
     : 'bg-red-600 hover:bg-red-700';
 
   return (
-    <div
-      className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
-    >
-      {/* --- Close Button --- */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 text-gray-500 hover:text-white"
+      <div
+        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
       >
-        <XIcon />
-      </button>
-
-      {/* --- Header --- */}
-      <h2 className="text-2xl font-bold text-white mb-4">
-        Buy {selectedOutcome.name}
-      </h2>
-      <div className={`text-lg font-medium mb-6 ${side === 'YES' ? 'text-green-400' : 'text-red-400'}`}>
-        {side} @ {(tradePrice * 100).toFixed(0)}¢
-      </div>
-
-      <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+        {/* --- Close Button --- */}
         <button
-          onClick={() => setTradeType('Market')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-white"
         >
-          Market
+          <XIcon />
         </button>
-        <button
-          onClick={() => setTradeType('Limit')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-        >
-          Limit
-        </button>
-      </div>
 
-      {tradeType === 'Market' ? (
-        <div className="w-full space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
-            <div className="relative mt-1">
-              <input
-                type="number"
-                value={marketAmount}
-                onChange={(e) => setMarketAmount(e.target.value)}
-                placeholder="0.00"
-                min="0"
-                step="any"
-                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
-            <div className="relative mt-1">
-              <input
-                type="text"
-                value={marketPayout}
-                disabled
-                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
-              />
-              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
-            </div>
-          </div>
-
-          <div className="text-sm text-gray-400 flex justify-between pt-2">
-            <span>Price per Share</span>
-            <span className="text-white font-medium">${tradePrice.toFixed(2)}</span>
-          </div>
+        {/* --- Header --- */}
+        <h2 className="text-2xl font-bold text-white mb-4">
+          Buy {selectedOutcome.name}
+        </h2>
+        <div className={`text-lg font-medium mb-6 ${side === 'YES' ? 'text-green-400' : 'text-red-400'}`}>
+          {side} @ {(tradePrice * 100).toFixed(0)}¢
         </div>
-      ) : (
-        <div className="flex flex-col space-y-4">
-          <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
-            <div className="w-full md:w-1/2">
-              <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
+
+        <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => setTradeType('Market')}
+            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          >
+            Market
+          </button>
+          <button
+            onClick={() => setTradeType('Limit')}
+            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          >
+            Limit
+          </button>
+        </div>
+
+        {tradeType === 'Market' ? (
+          <div className="w-full space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
               <div className="relative mt-1">
                 <input
                   type="number"
-                  value={limitPrice}
-                  onChange={(e) => setLimitPrice(e.target.value)}
+                  value={marketAmount}
+                  onChange={(e) => setMarketAmount(e.target.value)}
                   placeholder="0.00"
                   min="0"
-                  max="1"
-                  step="0.01"
-                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  step="any"
+                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
               </div>
             </div>
-            <div className="w-full md:w-1/2">
-              <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
               <div className="relative mt-1">
                 <input
-                  type="number"
-                  value={limitShares}
-                  onChange={(e) => setLimitShares(e.target.value)}
-                  placeholder="0.0"
-                  min="0"
-                  step="any"
-                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  type="text"
+                  value={marketPayout}
+                  disabled
+                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
               </div>
             </div>
-          </div>
+
             <div className="text-sm text-gray-400 flex justify-between pt-2">
-              <span>Est. Total Cost</span>
-              <span className="text-white font-medium">${limitCost}</span>
+              <span>Price per Share</span>
+              <span className="text-white font-medium">${tradePrice.toFixed(2)}</span>
             </div>
-          <div>
-            <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
-            <SimulatedOrderBook onPriceClick={handlePriceClick} />
+          </div>
+        ) : (
+          <div className="flex flex-col space-y-4">
+            <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
+              <div className="w-full md:w-1/2">
+                <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    value={limitPrice}
+                    onChange={(e) => setLimitPrice(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
+                </div>
+              </div>
+              <div className="w-full md:w-1/2">
+                <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    value={limitShares}
+                    onChange={(e) => setLimitShares(e.target.value)}
+                    placeholder="0.0"
+                    min="0"
+                    step="any"
+                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
+                </div>
+              </div>
+            </div>
+             <div className="text-sm text-gray-400 flex justify-between pt-2">
+                <span>Est. Total Cost</span>
+                <span className="text-white font-medium">${limitCost}</span>
+              </div>
+            <div>
+              <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
+              <SimulatedOrderBook onPriceClick={handlePriceClick} />
+            </div>
+          </div>
+        )}
+
+        <div className="text-sm text-gray-400 space-y-2 mt-6">
+          <div className="flex justify-between">
+            <span>Est. Fee</span>
+            <span className="text-white font-medium">$0.15 (Simulated)</span>
           </div>
         </div>
-      )}
 
-      <div className="text-sm text-gray-400 space-y-2 mt-6">
-        <div className="flex justify-between">
-          <span>Est. Fee</span>
-          <span className="text-white font-medium">$0.15 (Simulated)</span>
-        </div>
+        {/* --- UPDATED: Connect Wallet / Submit Button --- */}
+        {!userAddress ? (
+          <button
+            onClick={onConnectWallet}
+            className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
+          >
+            Connect Wallet to Trade
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
+            className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
+              ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
+                ? 'bg-gray-700 cursor-not-allowed'
+                : buttonClass
+              }
+            `}
+          >
+            {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
+          </button>
+        )}
+
       </div>
-
-      {/* --- UPDATED: Connect Wallet / Submit Button --- */}
-      {!userAddress ? (
-        <button
-          onClick={onConnectWallet}
-          className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
-        >
-          Connect Wallet to Trade
-        </button>
-      ) : (
-        <button
-          onClick={handleSubmit}
-          disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
-          className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
-            ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
-              ? 'bg-gray-700 cursor-not-allowed'
-              : buttonClass
-            }
-          `}
-        >
-          {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
-        </button>
-      )}
-
-    </div>
   );
 }
 
@@ -851,7 +851,7 @@ function MarketDetailPage({
   if (!market) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-          <p className="text-gray-400">Market data not found.</p>
+         <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
@@ -1396,8 +1396,8 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
 
   const walletOptions = [
     { name: 'Metamask', icon: <MetamaskIcon /> }, 
-    { name: 'OKX', icon: <OKXIcon /> },      
-    { name: 'Rabby', icon: <RabbyIcon /> },      
+    { name: 'OKX', icon: <OKXIcon /> },     
+    { name: 'Rabby', icon: <RabbyIcon /> },     
   ];
 
   return (
@@ -1631,7 +1631,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
                 </div>
               </div>
             </div>
-              <div className="text-sm text-gray-400 flex justify-between pt-2">
+             <div className="text-sm text-gray-400 flex justify-between pt-2">
                 <span>Est. Total Proceeds</span>
                 <span className="text-white font-medium">${limitProceeds}</span>
               </div>
@@ -2203,7 +2203,7 @@ export default function App() {
     setWalletState('idle');
     setPortfolioOnboardingState('prompt');
     setProvider(null); 
-    setSigner(null); 
+    setSigner(null);   
     if (currentPage === 'portfolio') {
       setCurrentPage('markets');
     }
@@ -2460,7 +2460,7 @@ export default function App() {
 
     } catch (err) {
         console.error("Withdrawal failed:", err);
-        if (err.code === 4001) {
+         if (err.code === 4001) {
             setToastMessage("Withdrawal rejected by user.");
             handleAddNotification("Withdrawal rejected by user.");
         } else {
@@ -2563,7 +2563,7 @@ export default function App() {
             onCancelOrder={handleCancelOrder}
             onDeposit={handleOpenDepositModal}
             onWithdraw={handleOpenWithdrawModal}
-            onLinkAccounts={handleLinkAccounts}
+V            onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal}
           />
         );
@@ -2600,9 +2600,7 @@ export default function App() {
         }
       `}</style>
 
-      {/* --- External Scripts for Web3 and Charts --- */}
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
-      <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.umd.js"></script>
+      {/* --- External Scripts are in index.html --- */}
 
       <Header
         navItems={navItems}
