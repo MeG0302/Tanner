@@ -3,14 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Updated title to match your project -->
     <title>Tanner.xyz</title>
     
     <!-- 
-      *** FIX: ADDED FIREBASE CONFIG SCRIPT ***
-      Your app.jsx file expects these global variables.
-      You MUST replace the placeholder values below with your
-      actual Firebase project configuration.
+      *** FIX: MANUALLY ADD FIREBASE CONFIG ***
+      Your app is failing to connect to Firebase because these variables 
+      are not being provided by the environment. 
+      
+      You MUST replace the "YOUR_..." placeholders below with your
+      actual Firebase project credentials to fix the
+      "auth/api-key-not-valid" error.
+    -->
+    <script>
+      var __app_id = "YOUR_APP_ID"; // e.g., "tanner-xyz"
+      var __firebase_config = JSON.stringify({
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_AUTH_DOMAIN", // e.g., "tanner-xyz.firebaseapp.com"
+        projectId: "YOUR_PROJECT_ID", // e.g., "tanner-xyz"
+        storageBucket: "YOUR_STORAGE_BUCKET", // e.g., "tanner-xyz.appspot.com"
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_FIREBASE_APP_ID"
+      });
+      // This is okay for development, but in production, you would
+      // set these as secure environment variables.
+    </script>
+    
+    <!-- 
+      *** Ethers.js (Required for Wallet Connection) ***
     -->
     <script>
       var __app_id = "default-app-id"; // Or your specific App ID
@@ -33,13 +52,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 
     <!-- 
-      This loads the Lightweight Charts library, required
-      by the HistoricalChart component in app.jsx.
+      *** Lightweight Charts (Required for Market Detail Page) ***
     -->
     <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.umd.js"></script>
 
   </head>
-  <!-- The body classes are now applied via 'src/index.css' -->
   <body>
     <!-- Your React app (from main.jsx) will be injected into this div -->
     <div id="root"></div>
