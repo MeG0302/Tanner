@@ -848,6 +848,7 @@ function MarketDetailPage({
   onCloseTradePanel
 }) {
   
+  // --- FIX: Add safety check for market and market.outcomes ---
   if (!market || !Array.isArray(market.outcomes)) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
@@ -925,7 +926,7 @@ function MarketDetailPage({
               side={tradeSide}
               onSubmit={onSubmit}
               userAddress={userAddress}
-              onConnectWallet={handleConnectWallet}
+              onConnectWallet={onConnectWallet}
               setToastMessage={setToastMessage}
               handleAddNotification={handleAddNotification}
               portfolioBalance={portfolioBalance}
@@ -1017,6 +1018,7 @@ function OpenOrderRow({ order, onCancel }) {
           src={logoUrl}
           alt={order.platform}
           className="w-5 h-5 rounded-full inline-block mr-2"
+          // Kalshi logo needs a white background to be visible
           style={order.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
         />
         {order.platform}
@@ -1901,7 +1903,7 @@ export default function App() {
   // --- State ---
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('markets'); 
+  const [activeNav, setActiveNav] = useState('markets'); // FIX: Replaced currentPage
   
   // --- Trading State ---
   const [selectedMarket, setSelectedMarket] = useState(null); 
@@ -2150,7 +2152,7 @@ export default function App() {
 
   // --- Navigation & UI Handlers ---
   const handleNavClick = (page) => {
-    setCurrentPage(page);
+    setActiveNav(page);
     setSelectedMarket(null); 
     setSelectedOutcome(null); 
   };
@@ -2185,7 +2187,7 @@ export default function App() {
       setSigner(newSigner);
       setUserAddress(address);
       setWalletState('connected');
-      setCurrentPage('portfolio'); 
+      setActiveNav('portfolio'); // FIX: Use activeNav
       setPortfolioOnboardingState('onboarding'); 
       handleAddNotification("Wallet connected successfully!");
       setToastMessage("Wallet Connected!");
@@ -2204,8 +2206,8 @@ export default function App() {
     setPortfolioOnboardingState('prompt');
     setProvider(null); 
     setSigner(null);   
-    if (currentPage === 'portfolio') {
-      setCurrentPage('markets');
+    if (activeNav === 'portfolio') { // FIX: Use activeNav
+      setActiveNav('markets');
     }
     // Note: To truly disconnect Metamask, you need to use a browser setting or a specific wallet provider's API.
     // For general React use, clearing state is sufficient.
@@ -2217,13 +2219,13 @@ export default function App() {
   const handleMarketClick = (market) => {
     setSelectedMarket(market);
     setSelectedOutcome(null); 
-    setCurrentPage('marketDetail');
+    // FIX: No longer need to set currentPage
   };
 
   const handleBackToMarkets = () => {
     setSelectedMarket(null);
     setSelectedOutcome(null);
-    setCurrentPage('markets');
+    setActiveNav('markets'); // FIX: Use activeNav
   };
 
   const handleSelectOutcome = (outcome, side) => {
@@ -2242,11 +2244,11 @@ export default function App() {
   };
 
   const handleLinkAccounts = () => {
-    setCurrentPage('linkAccounts');
+    setActiveNav('linkAccounts'); // FIX: Use activeNav
   };
 
   const handleBackToPortfolio = () => {
-    setCurrentPage('portfolio');
+    setActiveNav('portfolio'); // FIX: Use activeNav
   }
 
   // --- Portfolio Persistence Handlers ---
@@ -2527,27 +2529,30 @@ export default function App() {
 
 
   // --- Render Logic ---
+  // FIX: Determine current page based on state, not a separate variable
   const renderPage = () => {
-    switch (currentPage) {
+    if (selectedMarket) {
+      return (
+        <MarketDetailPage
+          market={selectedMarket}
+          onBack={handleBackToMarkets}
+          onSubmit={handleTradeSubmit}
+          userAddress={userAddress}
+          onConnectWallet={handleConnectWallet}
+          setToastMessage={setToastMessage}
+          handleAddNotification={handleAddNotification}
+          portfolioBalance={portfolioBalance}
+          selectedOutcome={selectedOutcome}
+          onSelectOutcome={handleSelectOutcome}
+          tradeSide={tradeSide}
+          onCloseTradePanel={handleCloseTradePanel}
+        />
+      );
+    }
+    
+    switch (activeNav) { // FIX: Use activeNav
       case 'markets':
         return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
-      case 'marketDetail':
-        return (
-          <MarketDetailPage
-            market={selectedMarket}
-            onBack={handleBackToMarkets}
-            onSubmit={handleTradeSubmit}
-            userAddress={userAddress}
-            onConnectWallet={handleConnectWallet}
-            setToastMessage={setToastMessage}
-            handleAddNotification={handleAddNotification}
-            portfolioBalance={portfolioBalance}
-            selectedOutcome={selectedOutcome}
-            onSelectOutcome={handleSelectOutcome}
-            tradeSide={tradeSide}
-            onCloseTradePanel={handleCloseTradePanel}
-          />
-        );
       case 'portfolio':
         if (!userAddress) {
           return <ConnectWalletPrompt onConnect={handleConnectWallet} />;
@@ -2563,7 +2568,7 @@ export default function App() {
             onCancelOrder={handleCancelOrder}
             onDeposit={handleOpenDepositModal}
             onWithdraw={handleOpenWithdrawModal}
-V            onLinkAccounts={handleLinkAccounts}
+            onLinkAccounts={handleLinkAccounts}
             onClosePosition={handleOpenClosePositionModal}
           />
         );
@@ -2604,7 +2609,7 @@ V            onLinkAccounts={handleLinkAccounts}
 
       <Header
         navItems={navItems}
-        activeNav={currentPage}
+        activeNav={activeNav} // FIX: Use activeNav
         onNavClick={handleNavClick}
         walletState={walletState}
         userAddress={userAddress}
