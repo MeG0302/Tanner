@@ -1994,7 +1994,8 @@ export default function App() {
     // 1. Check if data exists and seed if necessary
     const seedInitialData = async () => {
         try {
-            const docSnapshot = await getDocs(query(collection(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio"), where("__seed__", "==", true)));
+            // --- FIX: Renamed "__seed__" to "isSeeded" ---
+            const docSnapshot = await getDocs(query(collection(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio"), where("isSeeded", "==", true)));
             
             if (docSnapshot.empty && !isDataSeeded) {
                 console.log("Seeding initial portfolio data...");
@@ -2002,7 +2003,7 @@ export default function App() {
                     balance: initialPortfolioBalance,
                     positions: initialPositions,
                     openOrders: [],
-                    __seed__: true // Flag to prevent re-seeding
+                    isSeeded: true // --- FIX: Renamed "__seed__" to "isSeeded" ---
                 });
                 setIsDataSeeded(true);
                 handleAddNotification("Initial portfolio loaded and saved.");
