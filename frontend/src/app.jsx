@@ -2030,6 +2030,10 @@ export default function App() {
       
       if (user) {
          console.log("Firebase Auth user signed in:", user.uid);
+         
+         // --- FIX: REMOVED redundant listener from here. ---
+         // The listener is now correctly handled in the useEffect below.
+
       } else {
          console.log("Firebase Auth user not signed in. Attempting anonymous sign-in...");
         // Sign in anonymously if not authenticated
@@ -2078,10 +2082,10 @@ export default function App() {
     // 1. Check if data exists and seed if necessary
     const seedInitialData = async () => {
         try {
-            // --- FIX: Use window.firebase functions & "isSeeded" ---
-            const docSnapshot = await window.firebase.firestore.getDocs(window.firebase.firestore.query(window.firebase.firestore.collection(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio"), window.firebase.firestore.where("isSeeded", "==", true)));
+            // --- FIX: Replaced complex query with a simple getDoc ---
+            const docSnapshot = await window.firebase.firestore.getDoc(userDocRef);
             
-            if (docSnapshot.empty && !isDataSeeded) {
+            if (!docSnapshot.exists() && !isDataSeeded) { // --- FIX: Check !docSnapshot.exists() ---
                 console.log("Seeding initial portfolio data...");
                 // --- FIX: Use window.firebase functions & "isSeeded" ---
                 await window.firebase.firestore.setDoc(userDocRef, {
@@ -2092,7 +2096,7 @@ export default function App() {
                 });
                 setIsDataSeeded(true);
                 handleAddNotification("Initial portfolio loaded and saved.");
-            } else if (!docSnapshot.empty) {
+            } else if (docSnapshot.exists()) { // --- FIX: Check docSnapshot.exists() ---
                 console.log("Firestore: Data already seeded.");
                 setIsDataSeeded(true);
             }
