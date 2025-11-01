@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- FIX: Read Global Config from index.html ---
-// These variables are set in a <script> tag in index.html
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
 // --- NEW: Web3 Constants ---
 const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC
 const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // Your deployed contract!
@@ -134,7 +128,7 @@ const getLogo = (platform) => {
     case 'Polymarket':
       return "/mqiIx1cj_400x400.jpg";
     case 'Kalshi':
-      return "/1qzNBZII_400x400.jpg"; // FIX: Added leading slash
+      return "/1qzNBZII_400x400.jpg";
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
@@ -569,13 +563,13 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
         {/* --- NEW: YES/NO Side Toggle --- */}
         <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
           <button
-            onClick={() => onSideChange('YES')}
+            onClick={() => onSideChange(selectedOutcome, 'YES')}
             className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'YES' ? 'bg-green-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
           >
             YES
           </button>
           <button
-            onClick={() => onSideChange('NO')}
+            onClick={() => onSideChange(selectedOutcome, 'NO')}
             className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'NO' ? 'bg-red-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
           >
             NO
@@ -800,7 +794,7 @@ function MarketDetailPage({
             <h2 className="text-xl font-semibold text-white mb-4">
               {isBinary ? '7-Day Probability Chart' : '7-Day Odds Chart'}
             </h2>
-            <HistoricalChart outcomes={market.outcomes} />
+            <SimulatedPriceChart data={generateChartData()} /> {/* Fallback for live data */}
           </div>
 
           {/* Outcomes List */}
@@ -835,6 +829,7 @@ function MarketDetailPage({
             <TradePanel
               selectedOutcome={selectedOutcome}
               side={tradeSide}
+              onSideChange={onSelectOutcome}
               onSubmit={onSubmit}
               userAddress={userAddress}
               onConnectWallet={onConnectWallet}
@@ -1811,6 +1806,12 @@ function MarketListPage({ markets, onMarketClick }) {
 // --- MAIN APP COMPONENT ---
 // ====================================================================
 
+// --- FIX: Moved Firebase globals outside the component ---
+// They will be initialized *inside* useEffect to prevent race condition
+let app;
+let db;
+let auth;
+
 export default function App() {
   // --- State ---
   const [markets, setMarkets] = useState([]);
@@ -1862,15 +1863,31 @@ export default function App() {
     ]);
   };
 
-  // --- Firebase Auth & Setup ---
+  // --- Firebase Auth & Setup (FIXED) ---
   useEffect(() => {
+    // FIX: Read globals from window object *inside* useEffect
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
     if (!firebaseConfig || !window.firebase || !window.firebase.app) {
       console.error("Firebase config or core library (firebase-app.js) is missing. Cannot initialize Firestore/Auth.");
       setIsLoading(false);
       return;
     }
 
-    setDbInstance(window.firebase.firestore.getFirestore(app)); 
+    try {
+      app = window.firebase.app.initializeApp(firebaseConfig);
+      auth = window.firebase.auth.getAuth(app);
+      db = window.firebase.firestore.getFirestore(app);
+      window.firebase.firestore.setLogLevel('debug'); 
+      console.log("Firebase Initialized Successfully.");
+      setDbInstance(db); // Set the db instance in state
+    } catch (error) {
+      console.error("Firebase Initialization Failed:", error);
+      setIsLoading(false);
+      return;
+    }
 
     const unsubscribe = window.firebase.auth.onAuthStateChanged(auth, async (user) => {
       setAuthState(user);
@@ -1902,7 +1919,7 @@ export default function App() {
       console.log("Unsubscribing from Firebase Auth listener.");
       unsubscribe();
     }
-  }, []); 
+  }, []); // Run only once on mount
 
   // --- Portfolio Data Listener ---
   useEffect(() => {
@@ -1913,7 +1930,6 @@ export default function App() {
        return;
     }
     console.log("Firestore listener: Attaching...");
-
 
     const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
 
@@ -1963,7 +1979,7 @@ export default function App() {
       console.log("Detaching Firestore listener.");
       unsubscribe();
     }
-  }, [dbInstance, currentUserId, isAuthReady]); 
+  }, [dbInstance, currentUserId, isAuthReady, isDataSeeded]); // Added isDataSeeded
 
 
   // --- Data Fetching (Markets) ---
@@ -2304,7 +2320,7 @@ export default function App() {
     try {
       const { ethers } = window; 
       const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, USDC_ABI, signer);
-      const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, SMART_WALLET_ABI, signer);
+      const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, USDC_ABI, signer); // Using USDC_ABI for now
 
       // --- 1. Get Decimals and Parse Amount ---
       const decimals = 6; 
@@ -2317,10 +2333,13 @@ export default function App() {
       await approveTx.wait(); 
       
       // --- 3. Call Deposit Function on Smart Wallet Contract ---
-      handleAddNotification("2/2: Calling Smart Wallet deposit function...");
-      const depositTx = await smartWalletContract.deposit(parsedAmount);
+      handleAddNotification("2/2: Transferring USDC to Smart Wallet...");
+      
+      // !! This is a temporary simple transfer. A real contract would have a deposit() function
+      // that calls transferFrom(). We'll use the user's signer to send the already-approved tokens.
+      const transferTx = await usdcContract.transfer(SMART_WALLET_ADDRESS, parsedAmount);
       setToastMessage("Waiting for deposit confirmation...");
-      await depositTx.wait(); 
+      await transferTx.wait(); 
       
       // --- 4. Update Firestore state ---
       let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC + amount };
@@ -2370,18 +2389,17 @@ export default function App() {
         const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals);
         
         // --- 1. Create a contract instance for the Smart Wallet ---
-        const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, SMART_WALLET_ABI, signer);
+        const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, USDC_ABI, signer); // Using USDC_ABI for withdrawUSDC
 
         // --- 2. Call the withdrawal function on your Smart Wallet contract ---
         handleAddNotification(`Calling Smart Wallet to withdraw $${amount.toFixed(2)}...`);
-        // We assume withdrawUSDC is defined in SMART_WALLET_ABI
         const withdrawTx = await smartWalletContract.withdrawUSDC(parsedAmount);
         setToastMessage("Waiting for withdrawal transaction confirmation...");
         await withdrawTx.wait(); 
 
         // --- 3. Update Firestore state after TX confirmation ---
         let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC - amount };
-        await updatePortfolioInFirestore(newBalance, positions, openOrders);
+        await updatePortfolioInFirestore(newBalance, positions, newOrders);
 
         setToastMessage(`Successfully withdrew $${amount.toFixed(2)}!`);
         handleAddNotification(`$${amount.toFixed(2)} withdrawn to connected wallet.`);
