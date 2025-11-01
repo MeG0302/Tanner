@@ -1,98 +1,71 @@
 /**
  * Tanner.xyz App
  * Aggregated Prediction Market Frontend
- * --- V5 (Firestore + Web3 Stubs + Real Balance Fetching) ---
+ * --- V4 (Web3, Firestore, Simulated Live Data) ---
  */
 import React, { useState, useEffect, useRef } from 'react';
+// --- FIX: Removed dynamic URL imports. Firebase is loaded from index.html ---
+// import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js';
+// import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js';
+// import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, getDocs, where, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
 
-// --- Firebase Imports (Using CDN URLs for this environment) ---
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-import { 
-  getAuth, 
-  signInAnonymously, 
-  signInWithCustomToken, 
-  onAuthStateChanged 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  onSnapshot, 
-  updateDoc, 
-  collection, 
-  query, 
-  getDocs,
-  writeBatch,
-  getDoc,
-  setLogLevel
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-// --- Ethers.js (from CDN) ---
-// We assume ethers.js is loaded via a <script> tag, but we need the reference.
-// const { ethers } = window; // This will be used inside functions where window.ethers is available
+// --- Global Variables (Provided by Canvas Environment) ---
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
 // --- Web3 Constants ---
-// This is the address for USDC on the Sepolia testnet.
-const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Example: Sepolia USDC
-const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // <-- Placeholder!
+const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC Example
+const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // Placeholder for your deployed contract
 
-// This is the minimal ABI (Application Binary Interface) for a token
+// Minimal USDC (ERC-20) ABI for basic functions (balanceOf, approve)
 const USDC_ABI = [
-  "function balanceOf(address owner) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
   "function transfer(address to, uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
+  "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// --- NEW: Smart Wallet ABI (Task 2.1) ---
+// Minimal Smart Wallet ABI (Task 2.1)
 const SMART_WALLET_ABI = [
-  // Assumed function for depositing USDC after approval
   "function deposit(uint256 amount) external",
-  // Assumed function for withdrawing USDC
-  "function withdrawUSDC(uint256 amount) external",
-  // Assumed function for executing a trade
-  "function executeTrade(uint256 marketId, uint256 outcomeId, uint256 shares, uint256 priceLimit) external"
+  "function withdrawUSDC(uint256 amount) external"
 ];
 
-// --- Firebase Config (Provided by Environment) ---
-// These variables are expected to be injected by the Canvas environment.
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : { apiKey: "YOUR_FALLBACK_API_KEY", authDomain: "...", projectId: "..." }; // Fallback for safety
-
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
-// --- Initialize Firebase ---
-let app, auth, db;
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  setLogLevel('debug'); // Enable Firestore logging
-  console.log("Firebase Initialized Successfully.");
-} catch (error) {
-  console.error("Firebase Initialization Failed:", error);
+// --- Firebase Setup ---
+let app;
+let db;
+let auth;
+// --- FIX: Check if window.firebase exists before using it ---
+if (firebaseConfig && window.firebase) {
+  try {
+    app = window.firebase.app.initializeApp(firebaseConfig);
+    db = window.firebase.firestore.getFirestore(app);
+    auth = window.firebase.auth.getAuth(app);
+    // setLogLevel('debug'); // Enable Firestore logging
+    console.log("Firebase Initialized Successfully.");
+  } catch (e) {
+    console.error("Firebase Initialization Failed:", e);
+  }
+} else {
+    console.error("Firebase config or core library (firebase-app.js) is missing. Cannot initialize Firestore/Auth.");
 }
 
-// --- NEW: Universal Unique ID Generator ---
+
+// --- Universal Unique ID Generator ---
 function generateUniqueId() {
-  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
-    (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
-  );
+  // Use a simple time-based ID if crypto.getRandomValues is unavailable (though unlikely in modern browsers)
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
-
-// --- API LOGIC (Mock Fallback) ---
+// --- API LOGIC (Frontend fetch, designed to fail and use mock data) ---
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // --- FIX: Using HTTP URL as HTTPS failed (SSL_PROTOCOL_ERROR) ---
-  // This is a common issue when the server doesn't have a valid SSL cert.
-  // The browser might still block this (Mixed Content).
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  // --- FIX: Using relative path to use the Vite proxy ---
+  const API_URL = '/api/markets';
   // --- END OF FIX ---
 
-  // Added a brief delay to prevent spamming failed requests
   await new Promise(resolve => setTimeout(resolve, 500));
 
   try {
@@ -102,23 +75,27 @@ export const fetchMarkets = async (setToastMessage) => {
     }
     const data = await response.json();
     console.log(`Successfully fetched LIVE data: (${data.length})`, data);
+    // --- FIX: Ensure data is an array before returning ---
+    if (!Array.isArray(data)) {
+        console.error("Backend returned non-array data, falling back to mock.", data);
+        throw new Error("Invalid data format from backend.");
+    }
     return data;
   } catch (error) {
     // --- START ERROR LOGGING BLOCK ---
     console.log("------------------------------------------------");
     console.error("BACKEND FETCH FAILED: Failed to fetch", error);
-    if (error.message.includes('Failed to fetch')) {
+    if (error.message.includes('Failed to fetch') || error.message.includes('Failed to parse URL')) {
         console.error(`This is NOT a frontend code error. It means the React app (frontend) cannot reach your backend server at: ${API_URL}`);
         console.error("Possible Causes:");
         console.error("1. Your backend server (at 92.246.141.205:3001) is not running.");
         console.error("2. A firewall on your server is blocking port 3001.");
-        console.error("3. The browser is blocking the insecure HTTP request (Mixed Content Policy).");
+        console.error("3. The Vite proxy config in vite.config.js is incorrect.");
         console.error("Falling back to mock data as a temporary measure.");
     }
     console.log("------------------------------------------------");
     // --- END ERROR LOGGING BLOCK ---
     
-    // Check if setToastMessage exists before calling it
     if (setToastMessage) {
       setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
     }
@@ -127,52 +104,51 @@ export const fetchMarkets = async (setToastMessage) => {
     const mockData = [
       { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', volume_24h: 500000, 
         outcomes: [
-          { id: 10, name: 'Yes', price: 0.52, history: [] },
-          { id: 11, name: 'No', price: 0.48, history: [] }
+          { name: 'Yes', price: 0.52, history: [] },
+          { name: 'No', price: 0.48, history: [] }
         ]
       },
       { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', volume_24h: 400000,
         outcomes: [
-          { id: 20, name: 'Yes', price: 0.47, history: [] },
-          { id: 21, name: 'No', price: 0.53, history: [] }
+          { name: 'Yes', price: 0.47, history: [] },
+          { name: 'No', price: 0.53, history: [] }
         ]
       },
       { id: 3, category: 'Politics', title: 'Who will win the 2024 NYC Mayoral Election?', shortTitle: 'Who will win the 2024 NYC Mayoral Election?', platform: 'Polymarket', volume_24h: 300000, 
         outcomes: [
-          { id: 30, name: 'Zohran Mamdani', price: 0.94, history: [] },
-          { id: 31, name: 'Andrew Cuomo', price: 0.06, history: [] },
-          { id: 32, name: 'Curtis Sliwa', price: 0.01, history: [] }
+          { name: 'Zohran Mamdani', price: 0.94, history: [] },
+          { name: 'Andrew Cuomo', price: 0.06, history: [] },
+          { name: 'Curtis Sliwa', price: 0.01, history: [] }
         ]
       },
     ];
-    // Simulate history for mock data
     const addHistory = (market) => ({ ...market, outcomes: market.outcomes.map(o => ({ ...o, history: generateChartData(o.price) })) });
     return mockData.map(addHistory);
   }
 };
 
-// --- Mock Portfolio Data (USED FOR FIRESTORE SEEDING) ---
+// --- Mock Portfolio Data (for initial state) ---
 const initialPositions = [
-  { id: generateUniqueId(), marketId: 1, outcomeId: 10, outcomeName: 'Yes', title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
-  { id: generateUniqueId(), marketId: 3, outcomeId: 30, outcomeName: 'Zohran Mamdani', title: 'Who will win the 2024 NYC Mayoral Election?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
+  { id: generateUniqueId(), marketId: 1, outcomeName: 'Yes', title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
+  { id: generateUniqueId(), marketId: 3, outcomeName: 'Zohran Mamdani', title: 'Who will win the 2024 NYC Mayoral Election?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
 ];
 
 const initialPortfolioBalance = {
   totalUSDC: 1250.75,
-  totalValue: 1450.75, // This will be recalculated
-  totalPnl: 200.00,   // This will be recalculated
+  totalValue: 1450.75,
+  totalPnl: 200.00,
 };
 
 // --- Mock Order Book Data ---
 const mockOrderBook = {
-  bids: [ // Green
+  bids: [ 
     { price: 0.51, size: 250.5 },
     { price: 0.50, size: 1000.0 },
     { price: 0.49, size: 800.7 },
     { price: 0.48, size: 1200.0 },
     { price: 0.47, size: 500.0 },
   ],
-  asks: [ // Red
+  asks: [ 
     { price: 0.52, size: 150.0 },
     { price: 0.53, size: 750.2 },
     { price: 0.54, size: 1200.0 },
@@ -209,7 +185,7 @@ const mockReferralData = {
 };
 
 
-// --- Helper function for logos (Using placeholders now) ---
+// --- Helper function for logos ---
 const getLogo = (platform) => {
   switch (platform) {
     case 'Limitless':
@@ -217,30 +193,29 @@ const getLogo = (platform) => {
     case 'Polymarket':
       return "https://placehold.co/24x24/1E90FF/FFFFFF?text=P";
     case 'Kalshi':
-      // Kalshi logo needs a white background for visibility
       return "https://placehold.co/24x24/FFFFFF/000000?text=K"; 
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
 };
 
-// --- NEW: Mock Price Chart Data Generator (USED AS FALLBACK) ---
+// --- Mock Price Chart Data Generator (USED AS FALLBACK) ---
 const generateChartData = (startPrice) => {
   let data = [];
   let price = startPrice;
-  const now = Math.floor(Date.now() / 1000); // Current time in seconds
-  const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
-  const dataPoints = 168; // One point per hour for 7 days (7 * 24)
-  const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
+  const now = Math.floor(Date.now() / 1000); 
+  const sevenDaysAgo = now - (7 * 24 * 60 * 60); 
+  const dataPoints = 168; 
+  const timeStep = (7 * 24 * 60 * 60) / dataPoints; 
 
   for (let i = 0; i < dataPoints; i++) {
-    const change = (Math.random() - 0.5) * 0.02; // Small random change
+    const change = (Math.random() - 0.5) * 0.02; 
     price += change;
     if (price > 0.99) price = 0.99;
     if (price < 0.01) price = 0.01;
     data.push({ time: sevenDaysAgo + (i * timeStep), value: price });
   }
-  data[data.length - 1] = { time: now, value: price }; // Ensure last point is now
+  data[data.length - 1] = { time: now, value: price }; 
   return data;
 };
 
@@ -319,7 +294,7 @@ const MetamaskIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 318 318" xmlns="http://www.w3.org/2000/svg">
     <path d="M272.58 128.168L220.08 72.368C213.68 65.568 205.28 61.468 196.28 60.868C194.98 60.768 193.68 60.768 192.38 60.768H191.08C182.28 60.768 174.08 64.068 167.68 69.868L127.38 106.168L96.18 72.568C89.58 65.768 81.18 61.668 72.28 60.968C70.98 60.868 69.68 60.768 68.38 60.768H67.08C58.28 60.768 50.08 64.068 43.68 69.868L14.08 96.668C11.18 99.368 9.18 102.568 7.38 105.768C3.58 112.568 1.48 120.368 0.78 128.568C0.58 130.468 0.38 132.368 0.28 134.368C0.18 136.268 0.18 138.168 0.18 140.068V142.168C0.18 153.768 3.58 164.868 10.08 174.168L70.78 261.268C76.98 270.068 85.38 276.568 94.98 280.068C103.78 283.168 113.18 284.168 122.28 282.768L123.68 282.568C126.38 282.168 129.08 281.668 131.68 280.968C143.08 278.268 153.28 272.468 161.38 264.068L212.08 210.068L247.98 241.568C253.98 246.968 261.38 250.368 269.28 251.268C270.58 251.468 271.98 251.568 273.28 251.568C282.08 251.568 290.28 248.268 296.68 242.468L313.68 226.768C315.98 224.668 317.08 221.768 317.08 218.868V190.168C317.08 186.268 315.98 182.468 314.08 179.168L272.58 128.168ZM257.08 199.168L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08ZM171.18 122.968L193.38 102.368C195.18 100.768 197.68 100.768 199.38 102.368L209.68 111.768L171.18 146.968V122.968ZM107.08 118.968L84.88 139.568C83.08 141.168 80.58 141.168 78.88 139.568L68.58 130.168L107.08 94.968V118.968ZM41.88 113.668L62.78 94.568L92.28 120.768L62.78 147.268L41.88 128.468C39.08 125.868 39.08 121.468 41.88 118.868V118.868L41.88 113.668ZM105.68 263.868C101.38 265.968 96.58 266.968 91.78 266.668C86.78 266.368 81.98 264.868 77.88 262.168L48.28 234.868L88.98 197.868L121.38 233.668L105.68 263.868ZM273.28 235.668C272.08 235.668 270.88 235.468 269.68 235.168C266.18 234.468 263.08 232.868 260.68 230.168L228.48 194.268L272.58 146.368L296.68 218.868C297.88 220.868 298.18 223.368 297.38 225.668C296.48 228.068 294.58 229.968 292.18 230.868C286.08 233.268 279.48 234.768 272.78 235.568L273.28 235.668Z" fill="#E2761B"/>
     <path d="M212.08 210.068L161.38 264.068C153.28 272.468 143.08 278.268 131.68 280.968C129.08 281.668 126.38 282.168 123.68 282.568L122.28 282.768C113.18 284.168 103.78 283.168 94.98 280.068C85.38 276.568 76.98 270.068 70.78 261.268L10.08 174.168C3.58 164.868 0.18 153.768 0.18 142.168V140.068C0.18 138.168 0.18 136.268 0.28 134.368C0.38 132.368 0.58 130.468 0.78 128.568C1.48 120.368 3.58 112.568 7.38 105.768L10.08 102.168C10.68 101.168 11.28 100.268 11.98 99.368L14.08 96.668L43.68 69.868L62.78 94.568L41.88 113.668V118.868L41.88 128.468L62.78 147.268L92.28 120.768L68.58 130.168L78.88 139.568L84.88 139.568L107.08 118.968V94.968L171.18 146.968V122.968L209.68 111.768L199.38 102.368L193.38 102.368L171.18 122.968V122.968L127.38 106.168L167.68 69.868L191.08 60.768H192.38H196.28L220.08 72.368L272.58 128.168L314.08 179.168L284.98 179.168L257.08 133.068L215.78 177.868L247.98 207.368L257.08 199.168V190.168V186.268L272.58 146.368L228.48 194.268L260.68 230.168C263.08 232.868 266.18 234.468 269.68 235.168C270.88 235.468 272.08 235.668 273.28 235.668H273.28L296.68 242.468L313.68 226.768L317.08 218.868V190.168H257.08L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08L247.98 207.368L212.08 210.068Z" fill="#E2761B"/>
-    <path d="M121.38 233.668L88.98 197.868L48.28 234.868L77.88 262.168C81.98 264.868 86.78 266.368 91.78 266.668C96.58 266.968 101.38 265.968 105.68 263.868L121.38 233.668Z" fill="#E2761B"/>
+    <path d="M121.38 233.668L88.98 197.868L48.28 234.868L77.88 262.168C81.98 264.868 86.78 266.368 91.78 266.668C96.58 266.968 101.38 265.968 105.68 263.868Z" fill="#E2761B"/>
     <path d="M107.08 118.968V94.968L68.58 130.168L78.88 139.568C80.58 141.168 83.08 141.168 84.88 139.568L107.08 118.968Z" fill="#233447"/>
     <path d="M171.18 122.968V146.968L209.68 111.768L199.38 102.368C197.68 100.768 195.18 100.768 193.38 102.368L171.18 122.968Z" fill="#CC6228"/>
     <path d="M62.78 94.568L41.88 113.668C39.08 116.268 39.08 120.768 41.88 123.468V123.468L41.88 128.468L62.78 147.268L92.28 120.768L62.78 94.568Z" fill="#CC6228"/>
@@ -347,77 +322,166 @@ const RabbyIcon = () => (
 // START OF COMPONENTS (Defined before App)
 // ====================================================================
 
+// --- Custom Hook for Simulated Live Data (Task 1.2) ---
+function useSimulatedWebSocket(markets, setMarkets, handleAddNotification) {
+  useEffect(() => {
+    // 1. WebSocket URL (Replace with your real URL when backend is ready)
+    const SIMULATED_WS_URL = 'wss://simulated-market-stream.tanner.xyz';
+
+    // 2. Mock Price Generator for the simulated stream
+    const generatePriceUpdate = () => {
+      if (markets.length === 0) return null;
+
+      // Select a random market and a random outcome
+      const randomMarket = markets[Math.floor(Math.random() * markets.length)];
+      if (!Array.isArray(randomMarket.outcomes) || randomMarket.outcomes.length === 0) return null;
+      
+      const randomOutcome = randomMarket.outcomes[Math.floor(Math.random() * randomMarket.outcomes.length)];
+      if (typeof randomOutcome.price !== 'number') return null;
+      
+      // Calculate a small random change
+      const change = (Math.random() - 0.5) * 0.01; 
+      let newPrice = Math.max(0.01, Math.min(0.99, randomOutcome.price + change));
+
+      return {
+        marketId: randomMarket.id,
+        outcomeName: randomOutcome.name,
+        newPrice: parseFloat(newPrice.toFixed(4)),
+        timestamp: Date.now()
+      };
+    };
+
+    // 3. Simulated Connection/Stream Logic
+    let isConnected = false;
+    let updateInterval;
+
+    const simulateConnect = () => {
+      console.log(`[WS] Attempting to connect to ${SIMULATED_WS_URL}...`);
+      
+      // Simulate connection delay
+      setTimeout(() => {
+        isConnected = true;
+        console.log("[WS] Connected. Starting data stream.");
+        handleAddNotification("Market data stream established.");
+
+        // Start sending mock updates every 1000ms
+        updateInterval = setInterval(sendUpdate, 1000);
+      }, 1500);
+    };
+
+    const sendUpdate = () => {
+      const update = generatePriceUpdate();
+      if (update) {
+        // console.log("[WS] Sending update:", update);
+        // Process the received message immediately (mimicking ws.onmessage)
+        processMessage(update);
+      }
+    };
+
+    const processMessage = (update) => {
+      setMarkets(prevMarkets => {
+        let updated = false;
+        const newMarkets = prevMarkets.map(m => {
+          if (m.id === update.marketId) {
+            // Found market, now update the specific outcome
+            const newOutcomes = m.outcomes.map(o => {
+              if (o.name === update.outcomeName) {
+                updated = true;
+                return { ...o, price: update.newPrice };
+              }
+              return o;
+            });
+            
+            // Re-sort outcomes by new price
+            newOutcomes.sort((a, b) => b.price - a.price);
+
+            return { ...m, outcomes: newOutcomes };
+          }
+          return m;
+        });
+
+        // Only return new array if an update occurred to prevent unnecessary re-renders
+        return updated ? newMarkets : prevMarkets;
+      });
+    };
+
+    if (markets.length > 0) {
+      simulateConnect();
+    }
+    
+    // 4. Cleanup function
+    return () => {
+      if (updateInterval) {
+        clearInterval(updateInterval);
+      }
+      console.log("[WS] Disconnected.");
+    };
+
+  }, [markets.length]); // Re-run when markets are initially loaded
+}
+
+
 // --- *** NEW: HISTORICAL CHART COMPONENT *** ---
-// This component now accepts multiple outcomes and plots them all.
 function HistoricalChart({ outcomes }) {
   const chartContainerRef = useRef(null);
   const chartColors = ['#3B82F6', '#EC4899', '#10B981', '#F59E0B', '#8B5CF6']; // blue, pink, green, yellow, purple
 
   useEffect(() => {
-    // Check if the charting library is loaded
+    // Check if the charting library is loaded (Added in App component)
     if (!window.LightweightCharts) {
-      console.error("LightweightCharts library is not loaded. Ensure the script tag is included in index.html.");
-      // Render nothing or a placeholder if the library is missing.
+      console.error("LightweightCharts library is not loaded. Ensure the script tag is included.");
       return;
     }
     
-    // Ensure we have data and a ref
     if (!outcomes || outcomes.length === 0 || !chartContainerRef.current) {
       return;
     }
 
     const chart = window.LightweightCharts.createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
-      height: 300, // Fixed height for the chart area
+      height: 300, 
       layout: {
-        background: { color: '#030712' }, // gray-950
-        textColor: '#D1D5DB', // gray-300
+        background: { color: '#030712' }, 
+        textColor: '#D1D5DB', 
       },
       grid: {
-        vertLines: { color: '#1F2937' }, // gray-800
-        horzLines: { color: '#1F2937' }, // gray-800
+        vertLines: { color: '#1F2937' }, 
+        horzLines: { color: '#1F2937' }, 
       },
       priceScale: {
-        borderColor: '#374151', // gray-700
-        // Format price as percentage (e.g., "52¢")
+        borderColor: '#374151', 
         formatter: (price) => `${(price * 100).toFixed(0)}¢`,
-        autoScale: false, // Disable autoScale
-        // Force the Y-axis to always show 0¢ to 100¢
+        autoScale: false, 
         minValue: 0,
         maxValue: 1,
       },
       timeScale: {
-        borderColor: '#374151', // gray-700
+        borderColor: '#374151', 
         timeVisible: true,
         secondsVisible: false,
       },
       crosshair: {
         mode: window.LightweightCharts.CrosshairMode.Normal,
       },
-      // --- NEW: Add a legend ---
       legend: {
         visible: true,
         textColor: '#D1D5DB',
       },
     });
 
-    // --- NEW: Add a line series FOR EACH outcome ---
     outcomes.forEach((outcome, index) => {
-      // Safety check for history data
       if (Array.isArray(outcome.history) && outcome.history.length > 0) {
         const lineSeries = chart.addLineSeries({
-          color: chartColors[index % chartColors.length], // Cycle through colors
+          color: chartColors[index % chartColors.length], 
           lineWidth: 2,
-          title: outcome.name, // This will appear in the legend
+          title: outcome.name, 
         });
         lineSeries.setData(outcome.history);
       }
     });
     
-    // Fit the chart to the data
     chart.timeScale().fitContent();
 
-    // Handle chart resizing
     const handleResize = () => {
       if (chartContainerRef.current) {
         chart.applyOptions({ width: chartContainerRef.current.clientWidth });
@@ -426,15 +490,13 @@ function HistoricalChart({ outcomes }) {
 
     window.addEventListener('resize', handleResize);
 
-    // Cleanup on component unmount
     return () => {
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
 
-  }, [outcomes]); // Re-run effect if outcomes data changes
+  }, [outcomes]); 
 
-  // If no data, show a message
   if (!outcomes || outcomes.length === 0) {
     return (
       <div ref={chartContainerRef} className="w-full h-[300px] flex items-center justify-center text-gray-500">
@@ -443,7 +505,6 @@ function HistoricalChart({ outcomes }) {
     );
   }
   
-  // Render the chart container
   return <div ref={chartContainerRef} className="w-full h-[300px]" />;
 }
 
@@ -521,42 +582,36 @@ function SimulatedOrderBook({ onPriceClick }) {
 
 
 // --- *** UPDATED: TradePanel Component *** ---
-// Now supports trading a specific outcome
 function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddress, setToastMessage, handleAddNotification, portfolioBalance, onClose }) {
-  const [tradeType, setTradeType] = useState('Market'); // 'Market' or 'Limit'
-  const [marketAmount, setMarketAmount] = useState(''); // Amount in USDC for Market
-  const [limitPrice, setLimitPrice] = useState('');     // Price for Limit
-  const [limitShares, setLimitShares] = useState('');   // Amount in Shares for Limit
+  const [tradeType, setTradeType] = useState('Market'); 
+  const [marketAmount, setMarketAmount] = useState(''); 
+  const [limitPrice, setLimitPrice] = useState('');     
+  const [limitShares, setLimitShares] = useState('');   
 
-  // This effect updates the panel when the selected outcome or side changes
   useEffect(() => {
     if (selectedOutcome) {
       setTradeType('Market');
       setMarketAmount('');
       setLimitShares('');
-      // Set the price based on YES or NO side
       const price = (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price);
       setLimitPrice(price.toFixed(2));
     }
   }, [selectedOutcome, side]);
 
-  if (!selectedOutcome) return null; // Don't render if no outcome is selected
+  if (!selectedOutcome) return null; 
 
-  // Calculate the correct price for the trade
   const tradePrice = (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price);
   
-  // Calculate Market/Limit totals
   const marketPayout = (marketAmount > 0 && tradePrice > 0) ? (marketAmount / tradePrice).toFixed(2) : 0;
   const limitCost = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
 
   const handleSubmit = () => {
     if (!userAddress) {
       setToastMessage("Please connect wallet first.");
-      onConnectWallet(); // Open wallet modal
+      onConnectWallet(); 
       return;
     }
     
-    // Check if ethers.js is loaded
     if (typeof window.ethers === 'undefined') {
       setToastMessage("Web3 library not loaded. Cannot process trade.");
       return;
@@ -573,7 +628,7 @@ function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddr
     } else {
       tradeDetails = {
         tradeType: 'Limit',
-        amount: parseFloat(limitCost), // Use the calculated cost
+        amount: parseFloat(limitCost), 
         shares: parseFloat(limitShares),
         limitPrice: parseFloat(limitPrice),
       };
@@ -591,10 +646,8 @@ function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddr
       return;
     }
     
-    // Call the main onSubmit handler (which is 'handleTradeSubmit' in App)
     onSubmit(tradeDetails);
     
-    // Clear inputs and close panel
     setMarketAmount('');
     setLimitShares('');
     onClose();
@@ -607,159 +660,158 @@ function TradePanel({ selectedOutcome, side, onSubmit, onConnectWallet, userAddr
   const isMarketSubmitDisabled = !marketAmount || parseFloat(marketAmount) <= 0;
   const isLimitSubmitDisabled = !limitPrice || parseFloat(limitPrice) <= 0 || !limitShares || parseFloat(limitShares) <= 0;
 
-  // Set button color based on side
   const buttonClass = side === 'YES' 
     ? 'bg-green-600 hover:bg-green-700' 
     : 'bg-red-600 hover:bg-red-700';
 
   return (
-    <div
-      className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
-    >
-      {/* --- Close Button --- */}
-      <button
-        onClick={onClose}
-        className="absolute top-4 right-4 text-gray-500 hover:text-white"
+      <div
+        className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
       >
-        <XIcon />
-      </button>
-
-      {/* --- Header --- */}
-      <h2 className="text-2xl font-bold text-white mb-4">
-        Buy {selectedOutcome.name}
-      </h2>
-      <div className={`text-lg font-medium mb-6 ${side === 'YES' ? 'text-green-400' : 'text-red-400'}`}>
-        {side} @ {(tradePrice * 100).toFixed(0)}¢
-      </div>
-
-      <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+        {/* --- Close Button --- */}
         <button
-          onClick={() => setTradeType('Market')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-white"
         >
-          Market
+          <XIcon />
         </button>
-        <button
-          onClick={() => setTradeType('Limit')}
-          className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
-        >
-          Limit
-        </button>
-      </div>
 
-      {tradeType === 'Market' ? (
-        <div className="w-full space-y-4">
-          <div>
-            <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
-            <div className="relative mt-1">
-              <input
-                type="number"
-                value={marketAmount}
-                onChange={(e) => setMarketAmount(e.target.value)}
-                placeholder="0.00"
-                min="0"
-                step="any"
-                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
-            <div className="relative mt-1">
-              <input
-                type="text"
-                value={marketPayout}
-                disabled
-                className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
-              />
-              <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
-            </div>
-          </div>
-
-          <div className="text-sm text-gray-400 flex justify-between pt-2">
-            <span>Price per Share</span>
-            <span className="text-white font-medium">${tradePrice.toFixed(2)}</span>
-          </div>
+        {/* --- Header --- */}
+        <h2 className="text-2xl font-bold text-white mb-4">
+          Buy {selectedOutcome.name}
+        </h2>
+        <div className={`text-lg font-medium mb-6 ${side === 'YES' ? 'text-green-400' : 'text-red-400'}`}>
+          {side} @ {(tradePrice * 100).toFixed(0)}¢
         </div>
-      ) : (
-        <div className="flex flex-col space-y-4">
-          <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
-            <div className="w-full md:w-1/2">
-              <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
+
+        <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
+          <button
+            onClick={() => setTradeType('Market')}
+            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Market' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          >
+            Market
+          </button>
+          <button
+            onClick={() => setTradeType('Limit')}
+            className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${tradeType === 'Limit' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+          >
+            Limit
+          </button>
+        </div>
+
+        {tradeType === 'Market' ? (
+          <div className="w-full space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-400">Amount to Pay (USDC)</label>
               <div className="relative mt-1">
                 <input
                   type="number"
-                  value={limitPrice}
-                  onChange={(e) => setLimitPrice(e.target.value)}
+                  value={marketAmount}
+                  onChange={(e) => setMarketAmount(e.target.value)}
                   placeholder="0.00"
                   min="0"
-                  max="1"
-                  step="0.01"
-                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  step="any"
+                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
               </div>
             </div>
-            <div className="w-full md:w-1/2">
-              <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
+
+            <div>
+              <label className="text-xs font-medium text-gray-400">Est. Payout (Shares)</label>
               <div className="relative mt-1">
                 <input
-                  type="number"
-                  value={limitShares}
-                  onChange={(e) => setLimitShares(e.target.value)}
-                  placeholder="0.0"
-                  min="0"
-                  step="any"
-                  className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  type="text"
+                  value={marketPayout}
+                  disabled
+                  className="w-full pl-4 pr-16 py-3 bg-gray-800 text-gray-400 rounded-lg border border-gray-700"
                 />
-                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
+                <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">SHARES</span>
               </div>
             </div>
-          </div>
+
             <div className="text-sm text-gray-400 flex justify-between pt-2">
-              <span>Est. Total Cost</span>
-              <span className="text-white font-medium">${limitCost}</span>
+              <span>Price per Share</span>
+              <span className="text-white font-medium">${tradePrice.toFixed(2)}</span>
             </div>
-          <div>
-            <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
-            <SimulatedOrderBook onPriceClick={handlePriceClick} />
+          </div>
+        ) : (
+          <div className="flex flex-col space-y-4">
+            <div className="flex flex-col md:flex-row space-x-0 md:space-x-4 space-y-4 md:space-y-0">
+              <div className="w-full md:w-1/2">
+                <label className="text-xs font-medium text-gray-400">Limit Price ($)</label>
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    value={limitPrice}
+                    onChange={(e) => setLimitPrice(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">$</span>
+                </div>
+              </div>
+              <div className="w-full md:w-1/2">
+                <label className="text-xs font-medium text-gray-400">Amount (Shares)</label>
+                <div className="relative mt-1">
+                  <input
+                    type="number"
+                    value={limitShares}
+                    onChange={(e) => setLimitShares(e.target.value)}
+                    placeholder="0.0"
+                    min="0"
+                    step="any"
+                    className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">S</span>
+                </div>
+              </div>
+            </div>
+             <div className="text-sm text-gray-400 flex justify-between pt-2">
+                <span>Est. Total Cost</span>
+                <span className="text-white font-medium">${limitCost}</span>
+              </div>
+            <div>
+              <label className="text-xs font-medium text-gray-400">Order Book (Simulated)</label>
+              <SimulatedOrderBook onPriceClick={handlePriceClick} />
+            </div>
+          </div>
+        )}
+
+        <div className="text-sm text-gray-400 space-y-2 mt-6">
+          <div className="flex justify-between">
+            <span>Est. Fee</span>
+            <span className="text-white font-medium">$0.15 (Simulated)</span>
           </div>
         </div>
-      )}
 
-      <div className="text-sm text-gray-400 space-y-2 mt-6">
-        <div className="flex justify-between">
-          <span>Est. Fee</span>
-          <span className="text-white font-medium">$0.15 (Simulated)</span>
-        </div>
+        {/* --- UPDATED: Connect Wallet / Submit Button --- */}
+        {!userAddress ? (
+          <button
+            onClick={onConnectWallet}
+            className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
+          >
+            Connect Wallet to Trade
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
+            className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
+              ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
+                ? 'bg-gray-700 cursor-not-allowed'
+                : buttonClass
+              }
+            `}
+          >
+            {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
+          </button>
+        )}
+
       </div>
-
-      {/* --- UPDATED: Connect Wallet / Submit Button --- */}
-      {!userAddress ? (
-        <button
-          onClick={onConnectWallet}
-          className="w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors bg-blue-800 hover:bg-blue-700"
-        >
-          Connect Wallet to Trade
-        </button>
-      ) : (
-        <button
-          onClick={handleSubmit}
-          disabled={tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled}
-          className={`w-full py-3 mt-6 rounded-lg font-semibold text-white transition-colors
-            ${(tradeType === 'Market' ? isMarketSubmitDisabled : isLimitSubmitDisabled)
-              ? 'bg-gray-700 cursor-not-allowed'
-              : buttonClass
-            }
-          `}
-        >
-          {tradeType === 'Market' ? 'Confirm Trade' : 'Place Limit Order'}
-        </button>
-      )}
-
-    </div>
   );
 }
 
@@ -775,7 +827,6 @@ function OutcomeRow({ outcome, onSelectOutcome }) {
     <tr className="border-b border-gray-800 hover:bg-gray-900/50">
       <td className="p-4">
         <div className="font-medium text-white">{outcome.name}</div>
-        {/* <div className="text-sm text-gray-400">$1,234,567 Vol.</div> */}
       </td>
       <td className="p-4 text-center">
         <span className="font-bold text-2xl text-white">{priceCents}¢</span>
@@ -815,15 +866,15 @@ function MarketDetailPage({
   onCloseTradePanel
 }) {
   
-  if (!market) {
+  // --- FIX: Add safety check for market and market.outcomes ---
+  if (!market || !Array.isArray(market.outcomes)) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-          <p className="text-gray-400">Market data not found.</p>
+         <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
 
-  // Check if this is a simple Yes/No market
   const isBinary = market.outcomes.length === 2 && market.outcomes[0].name === 'Yes' && market.outcomes[1].name === 'No';
 
   return (
@@ -872,9 +923,10 @@ function MarketDetailPage({
                 </tr>
               </thead>
               <tbody>
-                {market.outcomes.map(outcome => (
+                {/* Safety check before map */}
+                {Array.isArray(market.outcomes) && market.outcomes.map(outcome => (
                   <OutcomeRow 
-                    key={outcome.id || outcome.name} // Use outcome.id if available
+                    key={outcome.name} 
                     outcome={outcome} 
                     onSelectOutcome={onSelectOutcome} 
                   />
@@ -886,7 +938,6 @@ function MarketDetailPage({
 
         {/* Right Column (Trade Panel) */}
         <div className="lg:col-span-1">
-          {/* The TradePanel is now rendered based on `selectedOutcome` state */}
           {selectedOutcome ? (
             <TradePanel
               selectedOutcome={selectedOutcome}
@@ -948,11 +999,11 @@ function PositionRow({ position, onClosePosition }) {
           {position.side}
         </span>
       </td>
-      <td className="px-4 py-4 text-sm text-gray-300">{position.shares.toFixed(2)}</td>
-      <td className="px-4 py-4 text-sm text-gray-300">${position.avgPrice.toFixed(2)}</td>
-      <td className={`px-4 py-4 text-sm text-white font-medium`}>${position.currentValue.toFixed(2)}</td>
+      <td className="px-4 py-4 text-sm text-gray-300">{position.shares ? position.shares.toFixed(2) : 'N/A'}</td>
+      <td className="px-4 py-4 text-sm text-gray-300">${position.avgPrice ? position.avgPrice.toFixed(2) : 'N/A'}</td>
+      <td className={`px-4 py-4 text-sm text-white font-medium`}>${position.currentValue ? position.currentValue.toFixed(2) : 'N/A'}</td>
       <td className={`px-4 py-4 text-sm font-medium ${pnlClass}`}>
-        {position.pnl >= 0 ? '+' : ''}{position.pnl.toFixed(2)}
+        {position.pnl ? (position.pnl >= 0 ? '+' : '') + position.pnl.toFixed(2) : 'N/A'}
       </td>
       {/* --- NEW: Close Button --- */}
       <td className="px-4 py-4 text-sm text-center">
@@ -973,7 +1024,7 @@ function OpenOrderRow({ order, onCancel }) {
     ? 'text-green-400'
     : 'text-red-400';
 
-  const logoUrl = getLogo(order.platform); // Get logo for platform
+  const logoUrl = getLogo(order.platform); 
 
   return (
     <tr className="hover:bg-gray-900/40 transition-colors">
@@ -996,9 +1047,9 @@ function OpenOrderRow({ order, onCancel }) {
           {order.side}
         </span>
       </td>
-      <td className="px-4 py-4 text-sm text-gray-300">${order.price.toFixed(2)}</td>
-      <td className="px-4 py-4 text-sm text-gray-300">{order.shares.toFixed(2)}</td>
-      <td className="px-4 py-4 text-sm text-white font-medium">${order.cost.toFixed(2)}</td>
+      <td className="px-4 py-4 text-sm text-gray-300">${order.price ? order.price.toFixed(2) : 'N/A'}</td>
+      <td className="px-4 py-4 text-sm text-gray-300">{order.shares ? order.shares.toFixed(2) : 'N/A'}</td>
+      <td className="px-4 py-4 text-sm text-white font-medium">${order.cost ? order.cost.toFixed(2) : 'N/A'}</td>
       <td className="px-4 py-4 text-sm text-center">
         <button
           onClick={() => onCancel(order.id)}
@@ -1013,13 +1064,14 @@ function OpenOrderRow({ order, onCancel }) {
 }
 
 // --- UPDATED: PortfolioPage Component ---
-function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposit, onWithdraw, onLinkAccounts, onClosePosition }) { // Added onClosePosition
+function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposit, onWithdraw, onLinkAccounts, onClosePosition }) { 
 
-  const totalPnlColor = balance.totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
+  const totalPnlColor = balance?.totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
 
-  // FIX: Calculate total value properly
-  const positionsValue = positions.reduce((acc, pos) => acc + pos.currentValue, 0);
-  const calculatedTotalValue = (balance.totalUSDC || 0) + positionsValue;
+  const positionsValue = positions.reduce((acc, pos) => acc + (pos.currentValue || 0), 0);
+  const calculatedTotalValue = (balance?.totalUSDC || 0) + positionsValue;
+  const displayTotalUSDC = (balance?.totalUSDC || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const displayTotalPnl = (balance?.totalPnl || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -1036,7 +1088,7 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
         {/* Available USDC */}
         <div className="bg-gray-950 border border-gray-800 rounded-lg p-6">
           <h3 className="text-sm font-medium text-gray-400 mb-2">Smart Wallet Balance (USDC)</h3>
-          <p className="text-3xl font-semibold text-white">${(balance.totalUSDC || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</p>
+          <p className="text-3xl font-semibold text-white">${displayTotalUSDC}</p>
           {/* --- NEW: Deposit/Withdraw Buttons --- */}
           <div className="flex space-x-2 mt-4">
             <button onClick={onDeposit} className="flex-1 flex items-center justify-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors">
@@ -1054,7 +1106,7 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
         <div className={`bg-gray-950 border border-gray-800 rounded-lg p-6`}>
           <h3 className="text-sm font-medium text-gray-400 mb-2">Total P&L</h3>
           <p className={`text-3xl font-semibold ${totalPnlColor}`}>
-            {(balance.totalPnl || 0) >= 0 ? '+' : ''}{(balance.totalPnl || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+            {(balance?.totalPnl || 0) >= 0 ? '+' : ''}{displayTotalPnl}
           </p>
         </div>
       </div>
@@ -1080,19 +1132,19 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Avg. Price</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Current Value</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">P&L</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Action</th> {/* NEW Column */}
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Action</th> 
           </tr>
         </thead><tbody className="divide-y divide-gray-800">
           {positions.map(pos => (
             <PositionRow
               key={pos.id}
               position={pos}
-              onClosePosition={onClosePosition} // Pass handler
+              onClosePosition={onClosePosition} 
             />
           ))}
           {positions.length === 0 && (
             <tr>
-              <td colSpan="7" className="text-center py-8 text-gray-500">You have no open positions.</td> {/* Updated colSpan */}
+              <td colSpan="7" className="text-center py-8 text-gray-500">You have no open positions.</td> 
             </tr>
           )}
         </tbody></table>
@@ -1206,7 +1258,7 @@ function LinkAccountsPage({ onBack }) {
 }
 
 // --- Leaderboard Page ---
-function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
+function LeaderboardPage({ leaderboardData }) { 
   return (
     <main className="flex-1 overflow-y-auto p-8">
       <h1 className="text-3xl font-bold text-white mb-8">Leaderboard: Top Traders</h1>
@@ -1222,7 +1274,7 @@ function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800">
-            {leaderboardData.map((trader, index) => ( // <-- UPDATED: Use prop
+            {leaderboardData.map((trader, index) => ( 
               <tr key={trader.rank} className="hover:bg-gray-900/40 transition-colors">
                 <td className="px-4 py-4 text-sm font-bold text-blue-400">{trader.rank}</td>
                 <td className="px-4 py-4 text-sm text-white">{trader.user}</td>
@@ -1241,12 +1293,10 @@ function LeaderboardPage({ leaderboardData }) { // <-- UPDATED: Receive prop
 }
 
 // --- NEW: Referrals Page ---
-function ReferralsPage({setToastMessage}) { // Pass setToastMessage
+function ReferralsPage({setToastMessage}) {
   const { referralCode, referredUsers, totalEarnings, commissionRate } = mockReferralData;
 
-  // Function to simulate copying text to clipboard
   const copyToClipboard = () => {
-    // We use document.execCommand('copy') as navigator.clipboard.writeText() is often blocked in iFrames.
     try {
       const tempElement = document.createElement('textarea');
       tempElement.value = referralCode;
@@ -1255,7 +1305,7 @@ function ReferralsPage({setToastMessage}) { // Pass setToastMessage
       document.execCommand('copy');
       document.body.removeChild(tempElement);
       // Use Toast notification instead of alert
-      setToastMessage(`Copied code to clipboard!`); 
+      setToastMessage(`Copied code to clipboard!`);  
     } catch (err) {
       setToastMessage('Could not copy text.');
     }
@@ -1310,7 +1360,7 @@ function ToastNotification({ message, show, onClose }) {
     if (show) {
       const timer = setTimeout(() => {
         onClose();
-      }, 3000); // Hide after 3 seconds
+      }, 3000); 
       return () => clearTimeout(timer);
     }
   }, [show, onClose]);
@@ -1366,9 +1416,9 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
   if (!isOpen) return null;
 
   const walletOptions = [
-    { name: 'Metamask', icon: <MetamaskIcon /> }, // UPDATED
-    { name: 'OKX', icon: <OKXIcon /> },   // UPDATED
-    { name: 'Rabby', icon: <RabbyIcon /> },   // UPDATED
+    { name: 'Metamask', icon: <MetamaskIcon /> }, 
+    { name: 'OKX', icon: <OKXIcon /> },   
+    { name: 'Rabby', icon: <RabbyIcon /> },   
   ];
 
   return (
@@ -1399,14 +1449,15 @@ function WalletConnectModal({ isOpen, onClose, onWalletSelect }) {
 }
 
 // --- NEW: DepositWithdrawModal Component ---
-function DepositWithdrawModal({ isOpen, onClose, modalType, onConfirm, portfolioBalance }) { // Added portfolioBalance
+function DepositWithdrawModal({ isOpen, onClose, modalType, onConfirm, portfolioBalance }) {
   const [amount, setAmount] = useState('');
   const title = modalType === 'deposit' ? 'Deposit USDC' : 'Withdraw USDC';
   const buttonText = modalType === 'deposit' ? 'Confirm Deposit' : 'Confirm Withdraw';
+  const maxAmount = modalType === 'deposit' ? null : (portfolioBalance?.totalUSDC || 0);
 
   useEffect(() => {
     if (isOpen) {
-      setAmount(''); // Reset amount when modal opens
+      setAmount(''); 
     }
   }, [isOpen]);
 
@@ -1418,7 +1469,7 @@ function DepositWithdrawModal({ isOpen, onClose, modalType, onConfirm, portfolio
   };
   
   // Check if withdrawal amount exceeds balance
-  const isWithdrawDisabled = modalType === 'withdraw' && (!amount || parseFloat(amount) <= 0 || parseFloat(amount) > portfolioBalance.totalUSDC);
+  const isWithdrawDisabled = modalType === 'withdraw' && (!amount || parseFloat(amount) <= 0 || parseFloat(amount) > maxAmount);
   const isDepositDisabled = modalType === 'deposit' && (!amount || parseFloat(amount) <= 0);
   const isDisabled = modalType === 'deposit' ? isDepositDisabled : isWithdrawDisabled;
 
@@ -1458,7 +1509,7 @@ function DepositWithdrawModal({ isOpen, onClose, modalType, onConfirm, portfolio
               <span className="absolute inset-y-0 right-4 flex items-center text-sm font-medium text-gray-400">USDC</span>
             </div>
             {/* Show error if trying to withdraw too much */}
-            {modalType === 'withdraw' && parseFloat(amount) > portfolioBalance.totalUSDC && (
+            {modalType === 'withdraw' && parseFloat(amount) > maxAmount && (
               <p className="text-red-400 text-xs mt-1">Insufficient balance.</p>
             )}
           </div>
@@ -1481,14 +1532,14 @@ function DepositWithdrawModal({ isOpen, onClose, modalType, onConfirm, portfolio
 
 // --- NEW: ClosePositionModal Component ---
 function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose }) {
-  const [closeType, setCloseType] = useState('Market'); // 'Market' or 'Limit'
+  const [closeType, setCloseType] = useState('Market'); 
   const [limitPrice, setLimitPrice] = useState('');
   const [limitShares, setLimitShares] = useState('');
 
   // --- UPDATED: Find the specific outcome to get its price ---
-  const outcome = market?.outcomes.find(o => o.id === position?.outcomeId);
+  const outcome = market?.outcomes.find(o => o.name === position?.outcomeName);
   
-  // Determine the "sell" price (the price of the *opposite* side)
+  // Determine the "sell" price (the price of the opposite side)
   const marketSellPrice = (outcome && position)
     ? (position.side === 'YES' ? (1 - outcome.price) : outcome.price)
     : 0; // Fallback
@@ -1539,7 +1590,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
           <XIcon />
         </button>
         <h2 className="text-2xl font-bold text-white mb-2">Close Position</h2>
-        <p className="text-sm text-gray-400 mb-6 truncate">Selling {position.shares.toFixed(2)} shares of "{position.outcomeName}"</p>
+        <p className="text-sm text-gray-400 mb-6 truncate">Selling {position.shares ? position.shares.toFixed(2) : 'N/A'} shares of "{position.outcomeName}"</p>
 
         <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
           <button
@@ -1560,7 +1611,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-400">Shares to Sell</span>
-              <span className="text-white font-medium">{position.shares.toFixed(2)}</span>
+              <span className="text-white font-medium">{position.shares ? position.shares.toFixed(2) : 'N/A'}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Est. Price per Share</span>
@@ -1583,6 +1634,7 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
                     onChange={(e) => setLimitPrice(e.target.value)}
                     placeholder="0.00"
                     min="0"
+                    max="1"
                     step="0.01"
                     className="w-full pl-4 pr-10 py-3 bg-gray-800 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
@@ -1639,7 +1691,6 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
 
 /**
  * Header Component
- * Contains the main navigation and wallet connection button.
  */
 function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onConnect, onDisconnect, onBellClick, notifCount }) {
   const getButtonClass = (item) => {
@@ -1667,7 +1718,8 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
             className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
           >
             <LogOutIcon />
-            <span>{userAddress.substring(0, 6)}...{userAddress.substring(userAddress.length - 4)}</span>
+            {/* --- FIX: Add safety check for userAddress --- */}
+            <span>{userAddress ? `${userAddress.substring(0, 6)}...${userAddress.substring(userAddress.length - 4)}` : 'Wallet'}</span>
           </button>
         );
       case 'idle':
@@ -1723,7 +1775,6 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
 
 /**
  * TickerTape Component
- * A scrolling bar of news items.
  */
 function TickerTape({ newsItems }) {
   return (
@@ -1746,90 +1797,98 @@ function TickerTape({ newsItems }) {
 }
 
 /**
- * --- *** UPDATED: MarketCard Component (Polymarket Style) *** ---
- * Displays a market, now showing only the top outcome.
+ * MarketCard Component (Polymarket Style)
  */
 function MarketCard({ market, onMarketClick }) {
-  
+    
   // --- FIX: Add a safety check for market.outcomes ---
   const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
   
   // Get the top outcome (they are pre-sorted by the backend or simulation)
   const topOutcome = outcomes[0];
 
-  // Check if it's a simple Yes/No market
-  const isBinary = topOutcome && topOutcome.name === 'Yes' && outcomes[1]?.name === 'No';
-  const noOutcome = isBinary ? outcomes[1] : null;
+  // --- FIX: Add safety check for topOutcome before reading its properties ---
+  if (!topOutcome) {
+    // Return a null or placeholder card if the market has no outcomes
+    return (
+        <div className="bg-gray-950 border border-gray-800 rounded-lg shadow-lg p-5 flex flex-col justify-between h-48">
+            <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+            <h3 className="text-md font-semibold text-white line-clamp-3 leading-tight">{market.shortTitle || market.title}</h3>
+            <span className="text-sm text-gray-500">Market data pending...</span>
+        </div>
+    );
+  }
+
+  const priceCents = (Number(topOutcome.price) * 100).toFixed(0); // Use Number() for safety
+  const isBinary = topOutcome.name === 'Yes';
+  
+  // Calculate the opposite price for binary markets
+  let oppositePriceCents = 'N/A';
+  if (isBinary) {
+    const noOutcome = outcomes.find(o => o.name === 'No');
+    oppositePriceCents = noOutcome ? (Number(noOutcome.price) * 100).toFixed(0) : '0'; // Use Number()
+  }
+
 
   return (
     <div
-      className="bg-gray-950 border border-gray-800 rounded-lg shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200 flex flex-col justify-between"
+      className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200 flex flex-col justify-between h-48"
       onClick={() => onMarketClick(market)}
     >
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs text-gray-400 uppercase">{market.category}</span>
-          <img
-            src={getLogo(market.platform)}
-            alt={market.platform}
-            className="w-6 h-6 rounded-full"
-            style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
-          L/>
-        </div>
-        <div className="text-xs text-gray-500 mb-1">
-          Vol: ${market.volume_24h ? market.volume_24h.toLocaleString() : 'N/A'}
-        </div>
-        
-        {/* --- UPDATED: Title (Fixed height and clamps text) --- */}
-        <h3 className="text-lg font-semibold text-white mb-4 h-20 overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:3] [-webkit-box-orient:vertical]">
-          {market.shortTitle || market.title}
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+        <img
+          src={getLogo(market.platform)}
+          alt={market.platform}
+          className="w-6 h-6 rounded-full"
+          style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
+        />
+      </div>
+      
+      <div className="mb-4 flex-1">
+        {/* --- FIX: Use line-clamp for truncation --- */}
+        <h3 className="text-base font-semibold text-white line-clamp-3 leading-tight">
+            {market.shortTitle || market.title}
         </h3>
       </div>
       
-      {/* --- UPDATED: Price Display (Polymarket Style) --- */}
-      {!topOutcome ? (
-        <div className="text-center text-gray-500">No outcome data.</div>
-      ) : isBinary ? (
-        // --- Binary (Yes/No) Market Display ---
-        <div className="flex items-center justify-between space-x-4">
-          <button className="flex-1 bg-green-600/20 hover:bg-green-600/40 text-green-300 font-medium py-3 px-3 rounded-lg transition-colors text-center">
-            <span className="block text-sm">Buy Yes</span>
-            <span className="block text-xl font-bold">{(topOutcome.price * 100).toFixed(0)}¢</span>
-          </button>
-          <button className="flex-1 bg-red-600/20 hover:bg-red-600/40 text-red-300 font-medium py-3 px-3 rounded-lg transition-colors text-center">
-            <span className="block text-sm">Buy No</span>
-            <span className="block text-xl font-bold">{(noOutcome.price * 100).toFixed(0)}¢</span>
-          </button>
+      <div className="flex justify-between items-center pt-2 border-t border-gray-800">
+        <div className="text-sm text-gray-500">
+            Vol: ${market.volume_24h ? (market.volume_24h / 1000).toFixed(0) + 'K' : 'N/A'}
         </div>
-      ) : (
-        // --- Categorical Market Display (Top Outcome) ---
-        <div className="flex items-center justify-between space-x-4">
-          <div className="flex items-center space-x-2 overflow-hidden">
-            <span className="text-3xl font-bold text-blue-400">
-              {(topOutcome.price * 100).toFixed(0)}¢
-            </span>
-            <span className="text-sm text-gray-400 truncate">{topOutcome.name}</span>
+        
+        {/* Price Box */}
+        <div className="flex space-x-2">
+          {/* Main Outcome Box (Always YES or highest odd) */}
+          <div className={`bg-green-600/30 text-green-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+            {isBinary ? 'Yes' : topOutcome.name}
+            <div className="text-lg leading-none mt-0.5">{priceCents}¢</div>
           </div>
+
+          {/* Opposite Outcome Box (Only for binary or if second outcome is relevant) */}
+          {isBinary && (
+            <div className={`bg-red-600/30 text-red-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+              No
+              <div className="text-lg leading-none mt-0.5">{oppositePriceCents}¢</div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
 /**
  * MarketListPage Component
- * The main page displaying filters and the grid of markets.
  */
 function MarketListPage({ markets, onMarketClick }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
-  // --- UPDATED CATEGORIES ---
   const categories = ['All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
 
-  // Filter based on search and category
   const filteredMarkets = markets
-    .filter(m => activeCategory === 'All' || m.category === activeCategory)
-    .filter(m => m.title && m.title.toLowerCase().includes(searchTerm.toLowerCase())); // Safety check for m.title
+    .filter(m => activeCategory === 'All' || m.category === activeCategory) 
+    .filter(m => m.title && m.title.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -1882,66 +1941,6 @@ function MarketListPage({ markets, onMarketClick }) {
   );
 }
 
-// --- NEW (Task 1.2): Simulated WebSocket Hook ---
-// This hook simulates a live data stream to replace the old setInterval
-function useSimulatedWebSocket(markets, setMarkets, setToastMessage) {
-  useEffect(() => {
-    if (markets.length === 0) return; // Don't run if markets aren't loaded
-
-    const interval = setInterval(() => {
-      // Pick a random market and outcome to update
-      const randomMarketIndex = Math.floor(Math.random() * markets.length);
-      const marketToUpdate = markets[randomMarketIndex];
-      
-      if (!marketToUpdate || !marketToUpdate.outcomes || marketToUpdate.outcomes.length === 0) {
-        return; // Safety check
-      }
-
-      const randomOutcomeIndex = Math.floor(Math.random() * marketToUpdate.outcomes.length);
-      const outcomeToUpdate = marketToUpdate.outcomes[randomOutcomeIndex];
-
-      // Simulate a new price
-      const change = (Math.random() - 0.5) * 0.02; // Small random change
-      let newPrice = Math.max(0.01, Math.min(0.99, outcomeToUpdate.price + change));
-
-      // Create the update payload (what a real WebSocket would send)
-      const updatePayload = {
-        marketId: marketToUpdate.id,
-        outcomeId: outcomeToUpdate.id,
-        newPrice: newPrice,
-      };
-
-      // --- This is where the client processes the message ---
-      setMarkets(prevMarkets => 
-        prevMarkets.map(market => {
-          if (market.id !== updatePayload.marketId) {
-            return market;
-          }
-          
-          // Found the market, update the specific outcome price
-          const newOutcomes = market.outcomes.map(outcome => {
-            if (outcome.id !== updatePayload.outcomeId) {
-              return outcome;
-            }
-            return { ...outcome, price: updatePayload.newPrice };
-          });
-          
-          // Re-sort outcomes by new price
-          newOutcomes.sort((a, b) => b.price - a.price);
-
-          return { ...market, outcomes: newOutcomes };
-        })
-      );
-      // --- End of message processing ---
-
-    }, 1000); // Send one update every 1 second
-
-    // setToastMessage("Live data simulation active."); // Optional: notify user
-
-    return () => clearInterval(interval); // Cleanup on unmount
-  }, [markets]); // Re-run if markets array changes (e.g., initial load)
-}
-
 
 // ====================================================================
 // --- MAIN APP COMPONENT ---
@@ -1951,26 +1950,31 @@ export default function App() {
   // --- State ---
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('markets'); // 'markets', 'portfolio', etc.
+  // --- FIX: Replaced currentPage with activeNav ---
+  const [activeNav, setActiveNav] = useState('markets'); 
   
-  // --- UPDATED: State for Trading ---
-  const [selectedMarket, setSelectedMarket] = useState(null); // The whole market object
-  const [selectedOutcome, setSelectedOutcome] = useState(null); // The specific outcome (e.g., "Andrew Cuomo")
-  const [tradeSide, setTradeSide] = useState('YES'); // 'YES' or 'NO'
+  // --- Trading State ---
+  const [selectedMarket, setSelectedMarket] = useState(null); 
+  const [selectedOutcome, setSelectedOutcome] = useState(null); 
+  const [tradeSide, setTradeSide] = useState('YES'); 
 
-  // --- FIRESTORE: Portfolio State ---
-  // This state is now controlled *by* the Firestore listener.
-  // We initialize as empty/loading, not with mock data.
-  const [walletState, setWalletState] = useState('idle'); // 'idle', 'connecting', 'signingIn', 'connected'
-  const [userAddress, setUserAddress] = useState(null); // The EOA (e.g., Metamask) address
-  const [userId, setUserId] = useState(null); // The Firebase Auth user ID
-  const [portfolioOnboardingState, setPortfolioOnboardingState] = useState('prompt'); // 'prompt', 'onboarding', 'smartWallet', 'linked'
-  const [portfolioBalance, setPortfolioBalance] = useState({ totalUSDC: 0, totalValue: 0, totalPnl: 0 });
-  const [positions, setPositions] = useState([]);
-  const [openOrders, setOpenOrders] = useState([]);
+  // --- Firestore/Auth State (Task 1.4) ---
+  const [isAuthReady, setIsAuthReady] = useState(false);
+  const [dbInstance, setDbInstance] = useState(null);
+  const [authState, setAuthState] = useState(null); // Firebase Auth User Object
+  const [isDataSeeded, setIsDataSeeded] = useState(false); 
+  const currentUserId = authState?.uid;
+
+  // Wallet & Portfolio State
+  const [walletState, setWalletState] = useState('idle'); 
+  const [userAddress, setUserAddress] = useState(null);
+  const [portfolioOnboardingState, setPortfolioOnboardingState] = useState('prompt'); 
+  const [portfolioBalance, setPortfolioBalance] = useState(initialPortfolioBalance); // Lives in Firestore
+  const [positions, setPositions] = useState(initialPositions); // Lives in Firestore
+  const [openOrders, setOpenOrders] = useState([]); // Lives in Firestore
   const [leaderboardData, setLeaderboardData] = useState(mockLeaderboard); 
 
-  // --- NEW: Web3 State ---
+  // --- Web3 State ---
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
 
@@ -1980,208 +1984,11 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   
-  // --- NEW: Modal State ---
-  const [modalState, setModalState] = useState({ type: null, isOpen: false }); // 'deposit', 'withdraw'
+  // --- Modal State ---
+  const [modalState, setModalState] = useState({ type: null, isOpen: false }); 
   const [closePositionState, setClosePositionState] = useState({ position: null, isOpen: false });
 
   const navItems = ['Markets', 'Portfolio', 'Leaderboard', 'Referrals'];
-
-  // --- Data Fetching (Markets) ---
-  useEffect(() => {
-    // This function will now call our *simulated* API
-    const loadMarkets = async () => {
-      setIsLoading(true);
-      try {
-        // Pass setToastMessage to fetchMarkets so it can report errors
-        const data = await fetchMarkets(setToastMessage);
-        
-        // FIX: Ensure data is an array before setting state
-        if (Array.isArray(data)) {
-            setMarkets(data);
-        } else {
-            console.error("Received non-array data from backend:", data);
-            setMarkets([]);
-        }
-      } catch (error) {
-        console.error("Failed to fetch markets:", error);
-        handleAddNotification("Error fetching markets.", 'error');
-        setMarkets([]); // Fallback to empty array
-      }
-      setIsLoading(false);
-    };
-    loadMarkets();
-  }, []);
-
-  // --- TASK 1.2: Simulated WebSocket Hook ---
-  // This replaces the old setInterval for price simulation.
-  useSimulatedWebSocket(markets, setMarkets, setToastMessage);
-
-  // --- TASK 1.4: Firebase Auth & Data Listener ---
-  useEffect(() => {
-    if (!auth || !db) {
-      console.error("Firebase is not initialized, cannot set up auth.");
-      return;
-    }
-
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        console.log("Firebase Auth user signed in:", user.uid);
-        setUserId(user.uid);
-        setWalletState('connected'); // Auth is complete
-
-        // --- Setup Firestore Listener ---
-        // Path to the user's private portfolio document
-        const portfolioDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/portfolio/main`);
-
-        const unsubscribePortfolio = onSnapshot(portfolioDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            // --- Data exists, load it into state ---
-            console.log("Firestore: Portfolio data loaded.");
-            const data = docSnap.data();
-            setPortfolioBalance(data.balance || { totalUSDC: 0, totalPnl: 0 });
-            setPositions(data.positions || []);
-            setOpenOrders(data.openOrders || []);
-            setPortfolioOnboardingState('smartWallet'); // Assume they have one if data exists
-          } else {
-            // --- No data, seed the document ---
-            console.log("Firestore: No portfolio, seeding with initial data...");
-            const initialData = {
-              balance: initialPortfolioBalance,
-              positions: initialPositions,
-              openOrders: [],
-              createdAt: new Date().toISOString()
-            };
-            setDoc(portfolioDocRef, initialData)
-              .then(() => {
-                console.log("Firestore: Seed data written successfully.");
-                // The listener will auto-update state from this new data
-              })
-              .catch(e => console.error("Firestore: Error seeding data:", e));
-          }
-        });
-
-        return () => {
-          console.log("Unsubscribing from Firestore portfolio listener.");
-          unsubscribePortfolio(); // Cleanup listener on auth change
-        };
-
-      } else {
-        console.log("Firebase Auth user signed out.");
-        setUserId(null);
-        // Reset portfolio state
-        setPortfolioBalance({ totalUSDC: 0, totalValue: 0, totalPnl: 0 });
-        setPositions([]);
-        setOpenOrders([]);
-      }
-    });
-
-    return () => {
-      console.log("Unsubscribing from Firebase Auth listener.");
-      unsubscribeAuth(); // Cleanup auth listener on component unmount
-    };
-  }, []); // Run only once on mount
-
-  // --- NEW (Task 2.3): Real Balance Fetching ---
-  useEffect(() => {
-    if (signer && userId && db) {
-      console.log("Task 2.3: Signer and UserId detected, fetching real balance...");
-      
-      const fetchBalance = async () => {
-        try {
-          const { ethers } = window;
-          const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, USDC_ABI, signer);
-          const decimals = await usdcContract.decimals();
-          const balanceBigNum = await usdcContract.balanceOf(await signer.getAddress());
-          
-          const balanceFormatted = parseFloat(ethers.utils.formatUnits(balanceBigNum, decimals));
-          console.log(`Fetched real USDC balance: ${balanceFormatted}`);
-          
-          // Now update this balance in Firestore
-          const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-          
-          // Use updateDoc to only change the totalUSDC field inside the balance map
-          await updateDoc(portfolioDocRef, {
-            "balance.totalUSDC": balanceFormatted
-          });
-          
-          setToastMessage("Real wallet balance fetched.");
-          
-        } catch (error) {
-          console.error("Failed to fetch real USDC balance:", error);
-          handleAddNotification("Failed to fetch real wallet balance.");
-        }
-      };
-
-      fetchBalance();
-    }
-  }, [signer, userId]); // Re-run when signer or userId becomes available
-
-
-  // --- P&L Recalculation Effect ---
-  // This effect recalculates P&L whenever prices (markets) or positions (Firestore) change
-  useEffect(() => {
-    if (markets.length === 0 || positions.length === 0) {
-      // Don't run if markets or positions aren't loaded
-      // But if positions ARE loaded (e.g. 0), we should run
-      if (markets.length === 0) return;
-    }; 
-
-    let totalPnl = 0;
-    let totalValue = 0;
-    
-    // Update positions with new P&L
-    const updatedPositions = positions.map(pos => {
-      const market = markets.find(m => m.id === pos.marketId);
-      // Find the specific outcome within that market
-      const outcome = market?.outcomes.find(o => o.id === pos.outcomeId);
-      
-      if (!market || !outcome) return pos; // Market or outcome data not loaded
-
-      // Get the current price for this specific outcome
-      // This logic is simplified; NO side price is (1 - YES price)
-      const currentPrice = pos.side === 'YES' ? outcome.price : (1 - outcome.price);
-      const newValue = pos.shares * currentPrice;
-      const newPnl = newValue - (pos.shares * pos.avgPrice);
-      
-      totalPnl += newPnl; // Accumulate P&L
-      totalValue += newValue; // Accumulate total value of all positions
-      
-      return { ...pos, currentValue: newValue, pnl: newPnl };
-    });
-
-    // We only update state if there's a meaningful change to avoid loops
-    // Note: This local update is for UI only. P&L is not saved back to Firestore here
-    // to avoid excessive writes. It's recalculated on the fly.
-    setPositions(updatedPositions);
-    setPortfolioBalance(prevBalance => ({
-      ...prevBalance,
-      totalPnl: totalPnl,
-      totalValue: (prevBalance.totalUSDC || 0) + totalValue // total value = cash + position value
-    }));
-
-  }, [markets, userId]); // Dependency: run this logic whenever 'markets' changes OR when 'userId' changes (which loads new positions)
-
-
-  // --- Leaderboard Refresh Simulation ---
-  useEffect(() => {
-    const leaderboardInterval = setInterval(() => {
-      console.log("Simulating 10-minute leaderboard refresh...");
-      
-      // Simulate new data by shuffling or slightly changing P&L
-      const newLeaderboardData = [...mockLeaderboard].map(trader => ({ // Create new array
-        ...trader,
-        pnl: trader.pnl + (Math.random() - 0.5) * 1000 // Add some variance
-      })).sort((a, b) => b.pnl - a.pnl) // Re-sort
-        .map((trader, index) => ({ ...trader, rank: index + 1 })); // Re-rank
-      
-      setLeaderboardData(newLeaderboardData);
-      // handleAddNotification("Leaderboard data has been refreshed."); // Too noisy
-
-    }, 600000); // 10 minutes
-
-    return () => clearInterval(leaderboardInterval);
-  }, []); // Run only once
-
 
   // --- Handlers ---
   const handleAddNotification = (message) => {
@@ -2191,21 +1998,234 @@ export default function App() {
     ]);
   };
 
+  // --- Firebase Auth & Setup (Task 1.4) ---
+  useEffect(() => {
+    // --- FIX: Check for window.firebase *and* config ---
+    if (!firebaseConfig || !window.firebase) {
+      console.error("Firebase config or core library is missing. Cannot initialize Firestore/Auth.");
+      setIsLoading(false);
+      return;
+    }
+
+    // --- FIX: Use window.firebase functions ---
+    setDbInstance(window.firebase.firestore.getFirestore(app)); // Set Firestore instance
+
+    const unsubscribe = window.firebase.auth.onAuthStateChanged(auth, async (user) => {
+      setAuthState(user);
+      setIsAuthReady(true);
+      
+      if (!user) {
+        // Sign in anonymously if not authenticated
+        try {
+          // --- FIX: Use window.firebase function ---
+          await window.firebase.auth.signInAnonymously(auth);
+        } catch (e) {
+          console.error("Anonymous sign in failed:", e);
+        }
+      }
+    });
+
+    // Sign in with the provided auth token on initial load
+    if (initialAuthToken) {
+        // --- FIX: Use window.firebase function ---
+        window.firebase.auth.signInWithCustomToken(auth, initialAuthToken).catch(error => {
+            console.error("Custom token sign in failed:", error);
+        });
+    }
+
+    return () => {
+      console.log("Unsubscribing from Firebase Auth listener.");
+      unsubscribe();
+    }
+  }, []);
+
+  // --- Portfolio Data Listener (Task 1.4) ---
+  useEffect(() => {
+    if (!dbInstance || !currentUserId || !isAuthReady) return;
+
+    // --- FIX: Use window.firebase functions ---
+    const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
+
+    // 1. Check if data exists and seed if necessary
+    const seedInitialData = async () => {
+        try {
+            // --- FIX: Use window.firebase functions & "isSeeded" ---
+            const docSnapshot = await window.firebase.firestore.getDocs(window.firebase.firestore.query(window.firebase.firestore.collection(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio"), window.firebase.firestore.where("isSeeded", "==", true)));
+            
+            if (docSnapshot.empty && !isDataSeeded) {
+                console.log("Seeding initial portfolio data...");
+                // --- FIX: Use window.firebase functions & "isSeeded" ---
+                await window.firebase.firestore.setDoc(userDocRef, {
+                    balance: initialPortfolioBalance,
+                    positions: initialPositions,
+                    openOrders: [],
+                    isSeeded: true // --- FIX: Renamed "__seed__" to "isSeeded" ---
+                });
+                setIsDataSeeded(true);
+                handleAddNotification("Initial portfolio loaded and saved.");
+            } else if (!docSnapshot.empty) {
+                setIsDataSeeded(true);
+            }
+        } catch (e) {
+            console.error("Error checking or seeding portfolio data:", e);
+        }
+    };
+
+    seedInitialData();
+
+    // 2. Set up real-time listener
+    console.log("Attaching Firestore real-time listener...");
+    // --- FIX: Use window.firebase function ---
+    const unsubscribe = window.firebase.firestore.onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            setPortfolioBalance(data.balance || initialPortfolioBalance);
+            setPositions(data.positions || initialPositions);
+            setOpenOrders(data.openOrders || []);
+            console.log("Portfolio data updated from Firestore.");
+        } else {
+            console.warn("User portfolio document does not exist yet.");
+        }
+    }, (error) => {
+        console.error("Firestore listener failed:", error);
+    });
+
+    return () => {
+      console.log("Detaching Firestore listener.");
+      unsubscribe();
+    }
+  }, [dbInstance, currentUserId, isAuthReady]); 
+
+
+  // --- Data Fetching (Markets) ---
+  useEffect(() => {
+    const loadMarkets = async () => {
+      setIsLoading(true);
+      try {
+        const data = await fetchMarkets(setToastMessage);
+        if (Array.isArray(data)) {
+            setMarkets(data);
+        } else {
+            console.error("Received non-array data from backend:", data);
+            setMarkets([]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch markets:", error);
+        handleAddNotification("Error fetching markets.", 'error');
+        setMarkets([]); 
+      }
+      setIsLoading(false);
+    };
+    loadMarkets();
+  }, []);
+
+
+  // --- Live Price Update Stream (Task 1.2) ---
+  useSimulatedWebSocket(markets, setMarkets, handleAddNotification);
+
+
+  // --- Real Balance Fetching (Task 2.3) ---
+  useEffect(() => {
+    const fetchRealBalance = async () => {
+        if (!signer || !dbInstance || !currentUserId || typeof window.ethers === 'undefined') {
+            return;
+        }
+
+        try {
+            const { ethers } = window;
+            const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, USDC_ABI, provider);
+            const userWalletAddress = await signer.getAddress();
+            
+            // Fetch connected wallet balance
+            const rawBalance = await usdcContract.balanceOf(userWalletAddress);
+            const decimals = 6; // Assuming 6 decimals for USDC (Need to verify in a real app)
+            const formattedBalance = parseFloat(ethers.utils.formatUnits(rawBalance, decimals));
+
+            // Fetch Smart Wallet balance (assuming Smart Wallet has USDC)
+            const rawSmartBalance = await usdcContract.balanceOf(SMART_WALLET_ADDRESS);
+            const formattedSmartBalance = parseFloat(ethers.utils.formatUnits(rawSmartBalance, decimals));
+            
+            console.log(`[Web3] Wallet Balance: ${formattedBalance.toFixed(2)} USDC`);
+            console.log(`[Web3] Smart Wallet Balance: ${formattedSmartBalance.toFixed(2)} USDC`);
+            
+            // --- CRITICAL: Update Firestore with the REAL fetched Smart Wallet Balance ---
+            // --- FIX: Use window.firebase functions ---
+            const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
+            await window.firebase.firestore.updateDoc(userDocRef, {
+                'balance.totalUSDC': formattedSmartBalance
+            });
+
+            handleAddNotification(`Real balance updated: ${formattedSmartBalance.toFixed(2)} USDC`);
+            setToastMessage("Balance Synced with Blockchain");
+
+        } catch (error) {
+            console.error("[Web3] Failed to fetch real balance:", error);
+            handleAddNotification("Error syncing real balance. Check network.");
+        }
+    };
+
+    fetchRealBalance();
+  }, [signer, dbInstance, currentUserId, provider]); 
+
+
+  // --- P&L Simulation (Runs when markets state changes due to WS) ---
+  useEffect(() => {
+    if (markets.length === 0) return; 
+
+    let totalPnl = 0;
+    
+    // 1. Calculate new P&L for positions
+    const newPositions = positions.map(pos => {
+      const market = markets.find(m => m.id === pos.marketId);
+      const outcome = market?.outcomes.find(o => o.name === pos.outcomeName);
+      
+      if (!market || !outcome || !pos.shares || !pos.avgPrice) return pos; 
+
+      const currentPrice = pos.side === 'YES' ? outcome.price : (1 - outcome.price);
+      const newValue = pos.shares * currentPrice;
+      const newPnl = newValue - (pos.shares * pos.avgPrice);
+      
+      totalPnl += newPnl; 
+      
+      return { ...pos, currentValue: newValue, pnl: newPnl };
+    });
+
+    // 2. Update Firestore if P&L or positions changed significantly (to avoid spamming)
+    if (JSON.stringify(newPositions) !== JSON.stringify(positions) || totalPnl !== portfolioBalance.totalPnl) {
+        if (dbInstance && currentUserId) {
+            // --- FIX: Use window.firebase functions ---
+            const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
+            window.firebase.firestore.updateDoc(userDocRef, {
+                'balance.totalPnl': totalPnl,
+                'positions': newPositions
+            }).catch(e => console.error("Failed to update P&L in Firestore:", e));
+        } else {
+            // Update local state if not authenticated yet
+            setPortfolioBalance(prevBalance => ({
+                ...prevBalance,
+                totalPnl: totalPnl
+            }));
+            setPositions(newPositions);
+        }
+    }
+  }, [markets, currentUserId, dbInstance]); 
+
+
+  // --- Navigation & UI Handlers ---
   const handleNavClick = (page) => {
-    setCurrentPage(page);
-    setSelectedMarket(null); // Clear market selection on nav
-    setSelectedOutcome(null); // Clear outcome selection on nav
+    setActiveNav(page);
+    setSelectedMarket(null); 
+    setSelectedOutcome(null); 
   };
 
   const handleConnectWallet = () => {
-    setIsWalletModalOpen(true); // <-- UPDATED: Just open the modal
+    setIsWalletModalOpen(true); 
   };
 
-  // --- UPDATED: Handle wallet selection from modal with ethers.js ---
+  // --- Handle wallet selection from modal with ethers.js ---
   const handleWalletSelected = async (walletName) => {
     setIsWalletModalOpen(false);
     
-    // Check if ethers.js and Metamask are available
     if (typeof window.ethereum === 'undefined' || typeof window.ethers === 'undefined') {
       handleAddNotification("Metamask or Ethers.js not found. Please install Metamask.");
       setToastMessage("Metamask not found!");
@@ -2217,54 +2237,44 @@ export default function App() {
     
     try {
       const { ethers } = window;
-      // 1. Create provider
       const newProvider = new ethers.providers.Web3Provider(window.ethereum);
       
-      // 2. Request accounts
       await newProvider.send("eth_requestAccounts", []);
       
-      // 3. Get signer and address
       const newSigner = newProvider.getSigner();
       const address = await newSigner.getAddress();
 
-      // 4. Set Web3 state
       setProvider(newProvider);
       setSigner(newSigner);
-      setUserAddress(address); // Set EOA address
-      setWalletState('signingIn'); // NEW state: Wallet connected, now signing into Firebase
-      handleAddNotification("Wallet connected! Authenticating...");
-
-      // --- 5. Authenticate with Firebase ---
-      // This assumes a backend function generates a custom token from the address.
-      // For simulation, we will use the injected token if available, or anonymous auth.
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        await signInWithCustomToken(auth, __initial_auth_token);
-      } else {
-        await signInAnonymously(auth); // Fallback for testing
-      }
-      // The onAuthStateChanged listener will handle setting the userId and 'connected' state.
-      
-      setCurrentPage('portfolio'); // Go to portfolio after connect
-      setPortfolioOnboardingState('onboarding'); // Show onboarding (listener will override this if data exists)
+      setUserAddress(address);
+      setWalletState('connected');
+      setActiveNav('portfolio'); // FIX: Use activeNav
+      setPortfolioOnboardingState('onboarding'); 
+      handleAddNotification("Wallet connected successfully!");
       setToastMessage("Wallet Connected!");
 
     } catch (err) {
-      console.error("Wallet or Auth error:", err);
+      console.error("Wallet connection error:", err);
       setWalletState('idle');
       handleAddNotification("Wallet connection failed or was rejected.");
       setToastMessage("Connection failed.");
     }
   };
 
-  const handleDisconnectWallet = () => {
-    // Note: This doesn't sign out Firebase auth, just disconnects wallet UI
+  const handleDisconnectWallet = async () => {
     setUserAddress(null);
     setWalletState('idle');
     setPortfolioOnboardingState('prompt');
-    setProvider(null); // <-- NEW
-    setSigner(null);     // <-- NEW
-    if (currentPage === 'portfolio') {
-      setCurrentPage('markets');
+    setProvider(null); 
+    setSigner(null);   
+    if (activeNav === 'portfolio') { // FIX: Use activeNav
+      setActiveNav('markets');
+    }
+    // Note: To truly disconnect Metamask, you need to use a browser setting or a specific wallet provider's API.
+    // For general React use, clearing state is sufficient.
+    // --- FIX: Use window.firebase function ---
+    if (auth) {
+      await window.firebase.auth.signOut(auth);
     }
     handleAddNotification("Wallet disconnected.");
     setToastMessage("Wallet Disconnected");
@@ -2272,171 +2282,140 @@ export default function App() {
 
   const handleMarketClick = (market) => {
     setSelectedMarket(market);
-    setSelectedOutcome(null); // Clear outcome, force user to select one
-    setCurrentPage('marketDetail');
+    setSelectedOutcome(null); 
+    // --- FIX: No longer need to set currentPage
   };
 
   const handleBackToMarkets = () => {
     setSelectedMarket(null);
     setSelectedOutcome(null);
-    setCurrentPage('markets');
+    setActiveNav('markets'); // FIX: Use activeNav
   };
 
-  // --- NEW: Handler for selecting an outcome to trade ---
   const handleSelectOutcome = (outcome, side) => {
     setSelectedOutcome(outcome);
     setTradeSide(side);
   };
   
-  // --- NEW: Handler to close the trade panel ---
   const handleCloseTradePanel = () => {
     setSelectedOutcome(null);
   };
 
   const handleCreateSmartWallet = () => {
-    // Simulate creation
     setPortfolioOnboardingState('smartWallet');
     handleAddNotification("Tanner Smart Wallet created!");
     setToastMessage("Smart Wallet Created!");
   };
 
   const handleLinkAccounts = () => {
-    setCurrentPage('linkAccounts');
+    setActiveNav('linkAccounts'); // FIX: Use activeNav
   };
 
   const handleBackToPortfolio = () => {
-    setCurrentPage('portfolio');
+    setActiveNav('portfolio'); // FIX: Use activeNav
   }
 
-  // --- FIRESTORE: handleTradeSubmit (Now uses selectedOutcome) ---
-  const handleTradeSubmit = async (tradeDetails) => {
-    if (!userId || !db) {
-      setToastMessage("Error: Not connected to database.");
-      return;
+  // --- Portfolio Persistence Handlers ---
+
+  const updatePortfolioInFirestore = async (newBalance, newPositions, newOrders) => {
+    if (!dbInstance || !currentUserId) {
+        handleAddNotification("Persistence failed: User not authenticated.");
+        return;
     }
+    // --- FIX: Use window.firebase functions ---
+    const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
+    try {
+        // --- FIX: Use window.firebase function ---
+        await window.firebase.firestore.updateDoc(userDocRef, {
+            balance: newBalance,
+            positions: newPositions,
+            openOrders: newOrders
+        });
+        console.log("Firestore updated successfully.");
+    } catch (e) {
+        console.error("Failed to write to Firestore:", e);
+        handleAddNotification("Error saving data to persistence layer.");
+    }
+  };
+
+
+  const handleTradeSubmit = async (tradeDetails) => {
     
     const { tradeType, amount, shares, limitPrice } = tradeDetails;
+    
+    // ** Simulating Web3 interaction for Market Orders **
 
-    // Get a reference to the portfolio document
-    const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-    
-    // --- TASK 2.4: Trade Execution Logic (Simulated) ---
-    // In a real implementation, this is where you would call:
-    // 1. usdcContract.approve(SMART_WALLET_ADDRESS, parsedAmount)
-    // 2. smartWalletContract.executeTrade(...)
-    //
-    // For now, we will just update Firestore as if the trade succeeded.
-    // We will simulate the 'approve' and 'execute' steps in Task 2.4
-    
-    // --- End of Simulated Trade ---
-    
-    try {
-      // We use a Firestore batch to safely update multiple things
-      const batch = writeBatch(db);
+    let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC - amount };
+    let newPositions = [...positions];
+    let newOrders = [...openOrders];
 
-      // 1. Update balance
-      const newBalance = portfolioBalance.totalUSDC - amount;
-      batch.update(portfolioDocRef, { "balance.totalUSDC": newBalance });
+    if (tradeType === 'Market') {
       
-      if (tradeType === 'Market') {
-        // 2. Add or update position
-        const existingIndex = positions.findIndex(
-          p => p.marketId === selectedMarket.id && p.outcomeId === selectedOutcome.id && p.side === tradeSide
-        );
-        
-        let newPositions = [...positions];
-        
-        if (existingIndex > -1) {
-          // Update existing position
-          const existing = newPositions[existingIndex];
-          const totalShares = existing.shares + shares;
-          const totalCost = (existing.shares * existing.avgPrice) + amount;
-          const newAvgPrice = totalCost / totalShares;
-          const updatedPos = { ...existing, shares: totalShares, avgPrice: newAvgPrice };
-          newPositions[existingIndex] = updatedPos;
-        } else {
-          // Add new position
-          const newPos = {
-            id: generateUniqueId(),
-            marketId: selectedMarket.id,
-            title: selectedMarket.title,
-            outcomeId: selectedOutcome.id, // <-- NEW
-            outcomeName: selectedOutcome.name, // <-- NEW
-            side: tradeSide,
-            shares: shares,
-            avgPrice: (tradeSide === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price),
-            currentValue: amount, // Initial value
-            pnl: 0
-          };
-          newPositions.push(newPos);
-        }
-        batch.update(portfolioDocRef, { positions: newPositions });
-        handleAddNotification(`Market ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} filled.`);
-        setToastMessage("Market Order Filled!");
-        
+      const existingIndex = positions.findIndex(
+        p => p.marketId === selectedMarket.id && p.outcomeName === selectedOutcome.name && p.side === tradeSide
+      );
+      
+      if (existingIndex > -1) {
+        const existing = positions[existingIndex];
+        const totalShares = existing.shares + shares;
+        const totalCost = (existing.shares * existing.avgPrice) + amount;
+        const newAvgPrice = totalCost / totalShares;
+        const updatedPos = { ...existing, shares: totalShares, avgPrice: newAvgPrice };
+        newPositions = [...positions.slice(0, existingIndex), updatedPos, ...positions.slice(existingIndex + 1)];
       } else {
-        // 2. Add a new limit order
-        const newOrder = {
+        const newPos = {
           id: generateUniqueId(),
           marketId: selectedMarket.id,
-          marketTitle: selectedMarket.title,
-          platform: selectedMarket.platform,
-          outcomeId: selectedOutcome.id, // <-- NEW
-          outcomeName: selectedOutcome.name, // <-- NEW
+          title: selectedMarket.title,
+          outcomeName: selectedOutcome.name, 
           side: tradeSide,
-          price: limitPrice,
           shares: shares,
-          cost: amount,
-          createdAt: new Date().toISOString()
+          avgPrice: (tradeSide === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price),
+          currentValue: amount,
+          pnl: 0
         };
-        
-        const newOpenOrders = [newOrder, ...openOrders];
-        batch.update(portfolioDocRef, { openOrders: newOpenOrders });
-        
-        handleAddNotification(`Limit ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} placed.`);
-        setToastMessage("Limit Order Placed!");
+        newPositions = [...positions, newPos];
       }
+      handleAddNotification(`Market ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} filled.`);
+      setToastMessage("Market Order Filled!");
+    } else {
       
-      // Commit all changes to Firestore
-      await batch.commit();
-      console.log("Firestore: Trade submitted and portfolio updated.");
-
-    } catch (error) {
-      console.error("Firestore: Trade submission failed:", error);
-      setToastMessage("Trade failed to save.");
-      handleAddNotification("Error: Trade could not be saved.");
+      const newOrder = {
+        id: generateUniqueId(),
+        marketId: selectedMarket.id,
+        marketTitle: selectedMarket.title,
+        platform: selectedMarket.platform,
+        outcomeName: selectedOutcome.name, 
+        side: tradeSide,
+        price: limitPrice,
+        shares: shares,
+        cost: amount
+      };
+      newOrders = [newOrder, ...openOrders];
+      handleAddNotification(`Limit ${tradeSide} order for ${shares.toFixed(2)} shares of ${selectedOutcome.name} placed.`);
+      setToastMessage("Limit Order Placed!");
     }
+
+    // Save changes to Firestore
+    await updatePortfolioInFirestore(newBalance, newPositions, newOrders);
   };
 
-  // --- FIRESTORE: handleCancelOrder ---
+
   const handleCancelOrder = async (orderId) => {
-    if (!userId || !db) return;
-    
     const orderToCancel = openOrders.find(o => o.id === orderId);
     if (orderToCancel) {
-      // Calculate refund
-      const newBalance = portfolioBalance.totalUSDC + orderToCancel.cost;
-      // Remove from open orders
-      const newOpenOrders = openOrders.filter(o => o.id !== orderId);
       
-      // Update Firestore
-      try {
-        const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-        await updateDoc(portfolioDocRef, {
-          "balance.totalUSDC": newBalance,
-          openOrders: newOpenOrders
-        });
-        
-        handleAddNotification("Limit order cancelled.");
-        setToastMessage("Order Cancelled");
-      } catch (error) {
-        console.error("Firestore: Order cancellation failed:", error);
-        setToastMessage("Order cancellation failed.");
-      }
+      let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC + orderToCancel.cost };
+      let newOrders = openOrders.filter(o => o.id !== orderId);
+      
+      await updatePortfolioInFirestore(newBalance, positions, newOrders);
+      
+      handleAddNotification("Limit order cancelled.");
+      setToastMessage("Order Cancelled");
     }
   };
 
-  // --- NEW: Modal Handlers ---
+
   const handleOpenDepositModal = () => setModalState({ type: 'deposit', isOpen: true });
   const handleOpenWithdrawModal = () => setModalState({ type: 'withdraw', isOpen: true });
 
@@ -2445,108 +2424,107 @@ export default function App() {
     setClosePositionState({ position: null, isOpen: false });
   };
 
-  // --- UPDATED (Task 2.1/2.2): handleConfirmDeposit with REAL ethers.js calls ---
+
+  // --- UPDATED: handleConfirmDeposit (Task 2.2) ---
   const handleConfirmDeposit = async (amount) => {
-    if (!signer || !userId || !db) {
-      setToastMessage("Wallet or Database not connected.");
+    if (!signer || !dbInstance || !currentUserId || typeof window.ethers === 'undefined') {
+      setToastMessage("Web3 error: Wallet not connected or Ethers.js not loaded.");
       return;
     }
     
-    if (!SMART_WALLET_ADDRESS || SMART_WALLET_ADDRESS === '0xB3C33d442469b432a44cB39787213D5f2C3f8c43') { // Safety check
+    if (!SMART_WALLET_ADDRESS || SMART_WALLET_ADDRESS === '0xB3C33d442469b432a44cB39787213D5f2C3f8c43') {
       setToastMessage("Developer: Smart Wallet address is not set.");
-      console.error("Please set SMART_WALLET_ADDRESS constant in app.jsx");
+      console.error("Please set SMART_WALLET_ADDRESS constant.");
       return;
     }
 
     handleCloseModals();
-    setToastMessage("Check wallet to approve transaction...");
+    setToastMessage("Initiating deposit sequence...");
     
     try {
-      const { ethers } = window; // Get ethers from window
-      
-      // 1. Create contract instances
+      const { ethers } = window; 
       const usdcContract = new ethers.Contract(USDC_CONTRACT_ADDRESS, USDC_ABI, signer);
-      const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, SMART_WALLET_ABI, signer); // <-- Task 2.1
-      
-      // 2. Get decimals (USDC usually has 6)
-      const decimals = await usdcContract.decimals(); 
+      const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, SMART_WALLET_ABI, signer);
+
+      // --- 1. Get Decimals and Parse Amount ---
+      const decimals = 6; 
       const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals);
 
-      // 3. Send 'approve' transaction (Task 2.2)
-      handleAddNotification("1/2: Approving USDC transfer...");
+      // --- 2. Approve Token Transfer to Smart Wallet ---
+      handleAddNotification("1/2: Requesting approval for USDC transfer...");
       const approveTx = await usdcContract.approve(SMART_WALLET_ADDRESS, parsedAmount);
-      await approveTx.wait(); // Wait for transaction to be mined
+      setToastMessage("Waiting for approval transaction confirmation...");
+      await approveTx.wait(); 
       
-      setToastMessage("Approved! Check wallet to confirm deposit...");
-      handleAddNotification("2/2: Depositing to Smart Wallet...");
-      
-      // 4. Send 'deposit' transaction to Smart Wallet (Task 2.2)
+      // --- 3. Call Deposit Function on Smart Wallet Contract ---
+      handleAddNotification("2/2: Calling Smart Wallet deposit function...");
       const depositTx = await smartWalletContract.deposit(parsedAmount);
-      await depositTx.wait(); // Wait for transaction to be mined
+      setToastMessage("Waiting for deposit confirmation...");
+      await depositTx.wait(); 
       
-      // 5. Update state on success (by updating Firestore)
-      const newBalance = portfolioBalance.totalUSDC + amount;
-      const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-      await updateDoc(portfolioDocRef, { "balance.totalUSDC": newBalance });
+      // --- 4. Update Firestore state (This should ideally be triggered by a contract event listener, but we update after TX confirmation) ---
+      let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC + amount };
+      await updatePortfolioInFirestore(newBalance, positions, openOrders);
 
       setToastMessage(`Successfully deposited $${amount.toFixed(2)}!`);
       handleAddNotification(`$${amount.toFixed(2)} deposited to Smart Wallet.`);
 
     } catch (err) {
       console.error("Deposit failed:", err);
-      // Check for user rejection
-      if (err.code === 4001) { // 4001 is Metamask's "User rejected transaction"
+      if (err.code === 4001) {
         setToastMessage("Deposit rejected by user.");
         handleAddNotification("Deposit rejected by user.");
       } else {
-        setToastMessage("Deposit transaction failed.");
+        setToastMessage("Deposit transaction failed. Check console.");
         handleAddNotification("Deposit failed.");
       }
     }
   };
 
-  // --- UPDATED (Task 2.1/2.2): handleConfirmWithdraw with REAL ethers.js calls ---
+
+  // --- UPDATED: handleConfirmWithdraw (Task 2.2) ---
   const handleConfirmWithdraw = async (amount) => {
-    if (!signer || !userId || !db) {
-        setToastMessage("Wallet or Database not connected.");
+    if (!signer || !dbInstance || !currentUserId || typeof window.ethers === 'undefined') {
+        setToastMessage("Web3 error: Wallet not connected or Ethers.js not loaded.");
         return;
     }
 
     if (amount > portfolioBalance.totalUSDC) {
-        setToastMessage("Withdrawal failed: Insufficient funds.");
-        handleAddNotification("Withdrawal failed: Insufficient funds.");
+        setToastMessage("Withdrawal failed: Insufficient Smart Wallet funds.");
+        handleAddNotification("Withdrawal failed: Insufficient Smart Wallet funds.");
         return;
     }
     
     if (!SMART_WALLET_ADDRESS || SMART_WALLET_ADDRESS === '0xB3C33d442469b432a44cB39787213D5f2C3f8c43') {
-      setToastMessage("Developer: Smart Wallet address is not set.");
-      console.error("Please set SMART_WALLET_ADDRESS constant in app.jsx");
-      return;
+        setToastMessage("Developer: Smart Wallet address is not set.");
+        console.error("Please set SMART_WALLET_ADDRESS constant.");
+        return;
     }
 
     handleCloseModals();
-    setToastMessage("Check wallet to confirm withdrawal...");
+    setToastMessage("Initiating withdrawal...");
 
     try {
         const { ethers } = window;
-        const decimals = 6; // Assuming USDC decimals
+        const decimals = 6; 
         const parsedAmount = ethers.utils.parseUnits(amount.toString(), decimals);
-
-        // 1. Create a contract instance for the Smart Wallet (Task 2.1)
+        
+        // --- 1. Create a contract instance for the Smart Wallet ---
         const smartWalletContract = new ethers.Contract(SMART_WALLET_ADDRESS, SMART_WALLET_ABI, signer);
 
-        // 2. Call the withdrawal function on your Smart Wallet contract (Task 2.2)
+        // --- 2. Call the withdrawal function on your Smart Wallet contract ---
+        handleAddNotification(`Calling Smart Wallet to withdraw $${amount.toFixed(2)}...`);
+        // We assume withdrawUSDC is defined in SMART_WALLET_ABI
         const withdrawTx = await smartWalletContract.withdrawUSDC(parsedAmount);
-        handleAddNotification(`Initiating withdrawal of $${amount.toFixed(2)}...`);
-        await withdrawTx.wait();
+        setToastMessage("Waiting for withdrawal transaction confirmation...");
+        await withdrawTx.wait(); 
 
-        // 3. Update state on success (by updating Firestore)
-        const newBalance = portfolioBalance.totalUSDC - amount;
-        const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
-        await updateDoc(portfolioDocRef, { "balance.totalUSDC": newBalance });
+        // --- 3. Update Firestore state after TX confirmation ---
+        let newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC - amount };
+        await updatePortfolioInFirestore(newBalance, positions, openOrders);
 
         setToastMessage(`Successfully withdrew $${amount.toFixed(2)}!`);
-        handleAddNotification(`$${amount.toFixed(2)} withdrawn from Smart Wallet.`);
+        handleAddNotification(`$${amount.toFixed(2)} withdrawn to connected wallet.`);
 
     } catch (err) {
         console.error("Withdrawal failed:", err);
@@ -2554,7 +2532,7 @@ export default function App() {
             setToastMessage("Withdrawal rejected by user.");
             handleAddNotification("Withdrawal rejected by user.");
         } else {
-            setToastMessage("Withdrawal transaction failed.");
+            setToastMessage("Withdrawal transaction failed. Check console.");
             handleAddNotification("Withdrawal failed.");
         }
     }
@@ -2564,103 +2542,83 @@ export default function App() {
     setClosePositionState({ position: position, isOpen: true });
   };
 
-  // --- FIRESTORE: handleConfirmClosePosition (Simulated) ---
+  // --- UPDATED: handleConfirmClosePosition (Simulated) ---
   const handleConfirmClosePosition = async (details) => {
-    if (!userId || !db) return;
     
     const { position, closeType, shares, price } = details;
     
     const market = markets.find(m => m.id === position.marketId);
-    const outcome = market?.outcomes.find(o => o.id === position.outcomeId);
+    const outcome = market?.outcomes.find(o => o.name === position.outcomeName);
 
     if (!market || !outcome) {
       setToastMessage("Error closing position: Market/Outcome not found.");
       return;
     }
 
+    // In a real application, this would be a market/limit sell contract call.
+    // We simulate the persistence layer update here:
     const marketSellPrice = position.side === 'YES' ? (1 - outcome.price) : outcome.price;
-    const portfolioDocRef = doc(db, `artifacts/${appId}/users/${userId}/portfolio/main`);
+    let newBalance = portfolioBalance;
+    let newPositions = positions;
+    let newOrders = openOrders;
     
-    try {
-      const batch = writeBatch(db);
-
-      if (closeType === 'Market') {
-        const proceeds = position.shares * marketSellPrice;
-        const newBalance = portfolioBalance.totalUSDC + proceeds;
-        const newPositions = positions.filter(p => p.id !== position.id); // Remove position
-
-        batch.update(portfolioDocRef, {
-          "balance.totalUSDC": newBalance,
-          positions: newPositions
-        });
-
-        setToastMessage(`Market close executed! (Simulated)`);
-        handleAddNotification(`Sold ${position.shares.toFixed(2)} shares of "${position.outcomeName}".`);
+    if (closeType === 'Market') {
+      const proceeds = position.shares * marketSellPrice;
+      newBalance = { ...portfolioBalance, totalUSDC: portfolioBalance.totalUSDC + proceeds };
+      newPositions = positions.filter(p => p.id !== position.id); // Remove position
       
-      } else {
-        // Limit Close: Add a new limit order for the *opposite* side.
-        const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
-        const limitOrder = {
-            id: generateUniqueId(),
-            marketId: position.marketId,
-            marketTitle: position.title,
-            platform: market.platform,
-            outcomeId: position.outcomeId, 
-            outcomeName: position.outcomeName,
-            side: oppositeSide,
-            price: price,
-            shares: shares,
-            cost: shares * price, // This is expected proceeds
-            createdAt: new Date().toISOString()
-        };
-        
-        // This assumes a full close. A partial close is more complex.
-        const newPositions = positions.filter(p => p.id !== position.id);
-        const newOpenOrders = [limitOrder, ...openOrders];
-
-        batch.update(portfolioDocRef, {
-          positions: newPositions, // Remove old position
-          openOrders: newOpenOrders // Add new limit sell
-        });
-        
-        setToastMessage("Limit close order placed! (Simulated)");
-        handleAddNotification(`Limit sell for ${shares.toFixed(2)} shares placed.`);
-      }
-
-      await batch.commit();
-      
-    } catch (error) {
-       console.error("Firestore: Close position failed:", error);
-       setToastMessage("Close position failed.");
+      setToastMessage(`Market close executed! (Simulated)`);
+      handleAddNotification(`Sold ${position.shares.toFixed(2)} shares of "${position.outcomeName}". (Simulated)`);
+    } else {
+      // Limit Close: Add a new limit order for the *opposite* side.
+      const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
+      const limitOrder = {
+          id: generateUniqueId(),
+          marketId: position.marketId,
+          marketTitle: position.title,
+          platform: market.platform,
+          outcomeName: position.outcomeName, 
+          side: oppositeSide,
+          price: price,
+          shares: shares,
+          cost: shares * price // This is expected proceeds
+      };
+      newOrders = [limitOrder, ...openOrders];
+      setToastMessage("Limit close order placed! (Simulated)");
+      handleAddNotification(`Limit sell for ${shares.toFixed(2)} shares placed. (Simulated)`);
     }
     
+    await updatePortfolioInFirestore(newBalance, newPositions, newOrders);
+
     handleCloseModals();
   };
 
 
   // --- Render Logic ---
+  // FIX: Determine current page based on state, not a separate variable
   const renderPage = () => {
-    switch (currentPage) {
+    if (selectedMarket) {
+      return (
+        <MarketDetailPage
+          market={selectedMarket}
+          onBack={handleBackToMarkets}
+          onSubmit={handleTradeSubmit}
+          userAddress={userAddress}
+          onConnectWallet={handleConnectWallet}
+          setToastMessage={setToastMessage}
+          handleAddNotification={handleAddNotification}
+          portfolioBalance={portfolioBalance}
+          selectedOutcome={selectedOutcome}
+          onSelectOutcome={handleSelectOutcome}
+          tradeSide={tradeSide}
+          onCloseTradePanel={handleCloseTradePanel}
+        />
+      );
+    }
+    
+    switch (activeNav) { // FIX: Use activeNav
       case 'markets':
         return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
-      case 'marketDetail':
-        return (
-          <MarketDetailPage
-            market={selectedMarket}
-            onBack={handleBackToMarkets}
-            onSubmit={handleTradeSubmit}
-            userAddress={userAddress}
-            onConnectWallet={handleConnectWallet}
-            setToastMessage={setToastMessage}
-            handleAddNotification={handleAddNotification}
-            portfolioBalance={portfolioBalance}
-            // --- NEW Props for multi-outcome ---
-            selectedOutcome={selectedOutcome}
-            onSelectOutcome={handleSelectOutcome}
-            tradeSide={tradeSide}
-            onCloseTradePanel={handleCloseTradePanel}
-          />
-        );
       case 'portfolio':
         if (!userAddress) {
           return <ConnectWalletPrompt onConnect={handleConnectWallet} />;
@@ -2668,7 +2626,6 @@ export default function App() {
         if (portfolioOnboardingState === 'onboarding') {
           return <PortfolioOnboarding onCreateSmartWallet={handleCreateSmartWallet} onLinkAccounts={handleLinkAccounts} />;
         }
-        // 'smartWallet' or 'linked'
         return (
           <PortfolioPage
             balance={portfolioBalance}
@@ -2703,7 +2660,7 @@ export default function App() {
 
   return (
     <div className="bg-black text-white min-h-screen flex flex-col font-sans">
-      {/* --- NEW: Ticker Tape Animation Fix --- */}
+      {/* --- CSS for Ticker Tape --- */}
       <style>{`
         @keyframes marquee {
           0% { transform: translateX(0%); }
@@ -2712,15 +2669,13 @@ export default function App() {
         .animate-marquee {
           animation: marquee 60s linear infinite;
         }
-        /* Ensure Lightweight Charts attribution is visible */
-        .tv-lightweight-charts { position: relative; }
       `}</style>
-      {/* --- NEW: Lightweight Charts Script --- */}
-      <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-      
+
+      {/* --- External Scripts are in index.html --- */}
+
       <Header
         navItems={navItems}
-        activeNav={currentPage}
+        activeNav={activeNav} // FIX: Use activeNav
         onNavClick={handleNavClick}
         walletState={walletState}
         userAddress={userAddress}
@@ -2749,7 +2704,7 @@ export default function App() {
         onWalletSelect={handleWalletSelected}
       />
       
-      {/* --- NEW: Render Modals --- */}
+      {/* --- Render Modals --- */}
       <DepositWithdrawModal
         isOpen={modalState.isOpen && (modalState.type === 'deposit' || modalState.type === 'withdraw')}
         onClose={handleCloseModals}
