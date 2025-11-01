@@ -848,7 +848,7 @@ function MarketDetailPage({
   onCloseTradePanel
 }) {
   
-  if (!market) {
+  if (!market || !Array.isArray(market.outcomes)) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
          <p className="text-gray-400">Market data not found.</p>
