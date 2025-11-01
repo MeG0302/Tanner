@@ -24,23 +24,6 @@
         messagingSenderId: "YOUR_SENDER_ID",
         appId: "YOUR_FIREBASE_APP_ID"
       });
-      // This is okay for development, but in production, you would
-      // set these as secure environment variables.
-    </script>
-    
-    <!-- 
-      *** Ethers.js (Required for Wallet Connection) ***
-    -->
-    <script>
-      var __app_id = "default-app-id"; // Or your specific App ID
-      var __firebase_config = JSON.stringify({
-        apiKey: "YOUR_API_KEY",
-        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT_ID.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
-      });
       // Set this to undefined so app.jsx uses anonymous sign-in
       var __initial_auth_token = undefined; 
     </script>
@@ -65,3 +48,4 @@
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
+
