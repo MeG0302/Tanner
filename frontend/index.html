@@ -7,10 +7,24 @@
     <title>Tanner.xyz</title>
     
     <!-- 
-      *** REMOVED SCRIPT ***
-      The Tailwind CSS script was removed because Tailwind is now 
-      loaded locally via 'src/index.css'.
+      *** FIX: ADDED FIREBASE CONFIG SCRIPT ***
+      Your app.jsx file expects these global variables.
+      You MUST replace the placeholder values below with your
+      actual Firebase project configuration.
     -->
+    <script>
+      var __app_id = "default-app-id"; // Or your specific App ID
+      var __firebase_config = JSON.stringify({
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.appspot.com",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "YOUR_APP_ID"
+      });
+      // Set this to undefined so app.jsx uses anonymous sign-in
+      var __initial_auth_token = undefined; 
+    </script>
     
     <!-- 
       This loads the ethers.js library, which is required
@@ -19,23 +33,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
 
     <!-- 
-      *** NEW SCRIPT ADDED ***
       This loads the Lightweight Charts library, required
       by the HistoricalChart component in app.jsx.
     -->
     <script src="https://unpkg.com/lightweight-charts@3.8.0/dist/lightweight-charts.umd.js"></script>
 
-    <!-- 
-      *** REMOVED SCRIPT ***
-      The Inter font link was removed because the font is now 
-      imported directly in 'src/index.css'.
-    -->
-
-    <!-- 
-      *** REMOVED STYLE ***
-      The default body font is now set in 'src/index.css'
-      via Tailwind's config.
-    -->
   </head>
   <!-- The body classes are now applied via 'src/index.css' -->
   <body>
@@ -46,4 +48,3 @@
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
-
