@@ -1,13 +1,12 @@
 /**
  * Tanner.xyz App
  * Aggregated Prediction Market Frontend
- * --- V4 (Web3, Firestore, Simulated Live Data) ---
+ * --- V5 (Firestore + Web3 Stubs + Real Balance Fetching) ---
  */
 import React, { useState, useEffect, useRef } from 'react';
-// --- FIX: Removed dynamic URL imports. Firebase is loaded from index.html ---
-// import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-app.js';
-// import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-auth.js';
-// import { getFirestore, doc, setDoc, onSnapshot, updateDoc, collection, query, getDocs, where, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.1.0/firebase-firestore.js';
+
+// --- FIX: Removed all 'import from "https://..."' statements. ---
+// Firebase is now loaded from index.html and accessed via 'window.firebase'
 
 // --- Global Variables (Provided by Canvas Environment) ---
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
@@ -15,72 +14,83 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
 // --- Web3 Constants ---
-const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC Example
-const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // Placeholder for your deployed contract
+const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Example: Sepolia USDC
+const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // <-- Placeholder!
 
-// Minimal USDC (ERC-20) ABI for basic functions (balanceOf, approve)
+// This is the minimal ABI (Application Binary Interface) for a token
 const USDC_ABI = [
+  "function balanceOf(address owner) view returns (uint256)",
   "function approve(address spender, uint256 amount) returns (bool)",
   "function transfer(address to, uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
-  "function balanceOf(address owner) view returns (uint256)"
 ];
 
-// Minimal Smart Wallet ABI (Task 2.1)
+// --- NEW: Smart Wallet ABI (Task 2.1) ---
 const SMART_WALLET_ABI = [
+  // Assumed function for depositing USDC after approval
   "function deposit(uint256 amount) external",
-  "function withdrawUSDC(uint256 amount) external"
+  // Assumed function for withdrawing USDC
+  "function withdrawUSDC(uint256 amount) external",
+  // Assumed function for executing a trade
+  "function executeTrade(uint256 marketId, uint256 outcomeId, uint256 shares, uint256 priceLimit) external"
 ];
 
 // --- Firebase Setup ---
 let app;
 let db;
 let auth;
-// --- FIX: Check if window.firebase exists before using it ---
-if (firebaseConfig && window.firebase) {
+// --- FIX: Check if window.firebase AND firebaseConfig exist before using them ---
+if (firebaseConfig && window.firebase && window.firebase.app) {
   try {
     app = window.firebase.app.initializeApp(firebaseConfig);
-    db = window.firebase.firestore.getFirestore(app);
     auth = window.firebase.auth.getAuth(app);
-    // setLogLevel('debug'); // Enable Firestore logging
+    db = window.firebase.firestore.getFirestore(app);
+    window.firebase.firestore.setLogLevel('debug'); // Enable Firestore logging
     console.log("Firebase Initialized Successfully.");
-  } catch (e) {
-    console.error("Firebase Initialization Failed:", e);
+  } catch (error) {
+    console.error("Firebase Initialization Failed:", error);
   }
 } else {
-    console.error("Firebase config or core library (firebase-app.js) is missing. Cannot initialize Firestore/Auth.");
+  console.error("Firebase config or core library (firebase-app.js) is missing. Cannot initialize Firestore/Auth.");
 }
 
 
-// --- Universal Unique ID Generator ---
+// --- NEW: Universal Unique ID Generator ---
 function generateUniqueId() {
-  // Use a simple time-based ID if crypto.getRandomValues is unavailable (though unlikely in modern browsers)
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
+  return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+    (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)
+  );
 }
 
-// --- API LOGIC (Frontend fetch, designed to fail and use mock data) ---
+
+// --- API LOGIC (Mock Fallback) ---
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // --- FIX: Using relative path to use the Vite proxy ---
+  // --- FIX: Use relative path for the proxy ---
   const API_URL = '/api/markets';
-  // --- END OF FIX ---
-
+  
   await new Promise(resolve => setTimeout(resolve, 500));
 
   try {
-    const response = await fetch(API_URL);
+    // --- FIX: Use window.location.origin to build absolute URL for fetch ---
+    // This resolves the "Failed to parse URL" error in some environments
+    const absoluteUrl = window.location.origin + API_URL;
+    const response = await fetch(absoluteUrl);
+    
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
     console.log(`Successfully fetched LIVE data: (${data.length})`, data);
+    
     // --- FIX: Ensure data is an array before returning ---
     if (!Array.isArray(data)) {
         console.error("Backend returned non-array data, falling back to mock.", data);
         throw new Error("Invalid data format from backend.");
     }
     return data;
+
   } catch (error) {
     // --- START ERROR LOGGING BLOCK ---
     console.log("------------------------------------------------");
@@ -96,6 +106,7 @@ export const fetchMarkets = async (setToastMessage) => {
     console.log("------------------------------------------------");
     // --- END ERROR LOGGING BLOCK ---
     
+    // Check if setToastMessage exists before calling it
     if (setToastMessage) {
       setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
     }
@@ -104,51 +115,52 @@ export const fetchMarkets = async (setToastMessage) => {
     const mockData = [
       { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', shortTitle: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', volume_24h: 500000, 
         outcomes: [
-          { name: 'Yes', price: 0.52, history: [] },
-          { name: 'No', price: 0.48, history: [] }
+          { id: 10, name: 'Yes', price: 0.52, history: [] },
+          { id: 11, name: 'No', price: 0.48, history: [] }
         ]
       },
       { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', shortTitle: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', volume_24h: 400000,
         outcomes: [
-          { name: 'Yes', price: 0.47, history: [] },
-          { name: 'No', price: 0.53, history: [] }
+          { id: 20, name: 'Yes', price: 0.47, history: [] },
+          { id: 21, name: 'No', price: 0.53, history: [] }
         ]
       },
       { id: 3, category: 'Politics', title: 'Who will win the 2024 NYC Mayoral Election?', shortTitle: 'Who will win the 2024 NYC Mayoral Election?', platform: 'Polymarket', volume_24h: 300000, 
         outcomes: [
-          { name: 'Zohran Mamdani', price: 0.94, history: [] },
-          { name: 'Andrew Cuomo', price: 0.06, history: [] },
-          { name: 'Curtis Sliwa', price: 0.01, history: [] }
+          { id: 30, name: 'Zohran Mamdani', price: 0.94, history: [] },
+          { id: 31, name: 'Andrew Cuomo', price: 0.06, history: [] },
+          { id: 32, name: 'Curtis Sliwa', price: 0.01, history: [] }
         ]
       },
     ];
+    // Simulate history for mock data
     const addHistory = (market) => ({ ...market, outcomes: market.outcomes.map(o => ({ ...o, history: generateChartData(o.price) })) });
     return mockData.map(addHistory);
   }
 };
 
-// --- Mock Portfolio Data (for initial state) ---
+// --- Mock Portfolio Data (USED FOR FIRESTORE SEEDING) ---
 const initialPositions = [
-  { id: generateUniqueId(), marketId: 1, outcomeName: 'Yes', title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
-  { id: generateUniqueId(), marketId: 3, outcomeName: 'Zohran Mamdani', title: 'Who will win the 2024 NYC Mayoral Election?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
+  { id: generateUniqueId(), marketId: 1, outcomeId: 10, outcomeName: 'Yes', title: 'Will Donald Trump win the 2024 US election?', side: 'YES', shares: 192.31, avgPrice: 0.52, currentValue: 100, pnl: 0 },
+  { id: generateUniqueId(), marketId: 3, outcomeId: 30, outcomeName: 'Zohran Mamdani', title: 'Who will win the 2024 NYC Mayoral Election?', side: 'YES', shares: 161.29, avgPrice: 0.31, currentValue: 50, pnl: 0 },
 ];
 
 const initialPortfolioBalance = {
   totalUSDC: 1250.75,
-  totalValue: 1450.75,
-  totalPnl: 200.00,
+  totalValue: 1450.75, // This will be recalculated
+  totalPnl: 200.00,   // This will be recalculated
 };
 
 // --- Mock Order Book Data ---
 const mockOrderBook = {
-  bids: [ 
+  bids: [ // Green
     { price: 0.51, size: 250.5 },
     { price: 0.50, size: 1000.0 },
     { price: 0.49, size: 800.7 },
     { price: 0.48, size: 1200.0 },
     { price: 0.47, size: 500.0 },
   ],
-  asks: [ 
+  asks: [ // Red
     { price: 0.52, size: 150.0 },
     { price: 0.53, size: 750.2 },
     { price: 0.54, size: 1200.0 },
@@ -185,7 +197,7 @@ const mockReferralData = {
 };
 
 
-// --- Helper function for logos ---
+// --- Helper function for logos (Using placeholders now) ---
 const getLogo = (platform) => {
   switch (platform) {
     case 'Limitless':
@@ -193,29 +205,30 @@ const getLogo = (platform) => {
     case 'Polymarket':
       return "https://placehold.co/24x24/1E90FF/FFFFFF?text=P";
     case 'Kalshi':
+      // Kalshi logo needs a white background for visibility
       return "https://placehold.co/24x24/FFFFFF/000000?text=K"; 
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
 };
 
-// --- Mock Price Chart Data Generator (USED AS FALLBACK) ---
+// --- NEW: Mock Price Chart Data Generator (USED AS FALLBACK) ---
 const generateChartData = (startPrice) => {
   let data = [];
   let price = startPrice;
-  const now = Math.floor(Date.now() / 1000); 
-  const sevenDaysAgo = now - (7 * 24 * 60 * 60); 
-  const dataPoints = 168; 
-  const timeStep = (7 * 24 * 60 * 60) / dataPoints; 
+  const now = Math.floor(Date.now() / 1000); // Current time in seconds
+  const sevenDaysAgo = now - (7 * 24 * 60 * 60); // 7 days ago
+  const dataPoints = 168; // One point per hour for 7 days (7 * 24)
+  const timeStep = (7 * 24 * 60 * 60) / dataPoints; // Seconds per step
 
   for (let i = 0; i < dataPoints; i++) {
-    const change = (Math.random() - 0.5) * 0.02; 
+    const change = (Math.random() - 0.5) * 0.02; // Small random change
     price += change;
     if (price > 0.99) price = 0.99;
     if (price < 0.01) price = 0.01;
     data.push({ time: sevenDaysAgo + (i * timeStep), value: price });
   }
-  data[data.length - 1] = { time: now, value: price }; 
+  data[data.length - 1] = { time: now, value: startPrice }; // Ensure last point is now
   return data;
 };
 
@@ -294,7 +307,7 @@ const MetamaskIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 318 318" xmlns="http://www.w3.org/2000/svg">
     <path d="M272.58 128.168L220.08 72.368C213.68 65.568 205.28 61.468 196.28 60.868C194.98 60.768 193.68 60.768 192.38 60.768H191.08C182.28 60.768 174.08 64.068 167.68 69.868L127.38 106.168L96.18 72.568C89.58 65.768 81.18 61.668 72.28 60.968C70.98 60.868 69.68 60.768 68.38 60.768H67.08C58.28 60.768 50.08 64.068 43.68 69.868L14.08 96.668C11.18 99.368 9.18 102.568 7.38 105.768C3.58 112.568 1.48 120.368 0.78 128.568C0.58 130.468 0.38 132.368 0.28 134.368C0.18 136.268 0.18 138.168 0.18 140.068V142.168C0.18 153.768 3.58 164.868 10.08 174.168L70.78 261.268C76.98 270.068 85.38 276.568 94.98 280.068C103.78 283.168 113.18 284.168 122.28 282.768L123.68 282.568C126.38 282.168 129.08 281.668 131.68 280.968C143.08 278.268 153.28 272.468 161.38 264.068L212.08 210.068L247.98 241.568C253.98 246.968 261.38 250.368 269.28 251.268C270.58 251.468 271.98 251.568 273.28 251.568C282.08 251.568 290.28 248.268 296.68 242.468L313.68 226.768C315.98 224.668 317.08 221.768 317.08 218.868V190.168C317.08 186.268 315.98 182.468 314.08 179.168L272.58 128.168ZM257.08 199.168L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08ZM171.18 122.968L193.38 102.368C195.18 100.768 197.68 100.768 199.38 102.368L209.68 111.768L171.18 146.968V122.968ZM107.08 118.968L84.88 139.568C83.08 141.168 80.58 141.168 78.88 139.568L68.58 130.168L107.08 94.968V118.968ZM41.88 113.668L62.78 94.568L92.28 120.768L62.78 147.268L41.88 128.468C39.08 125.868 39.08 121.468 41.88 118.868V118.868L41.88 113.668ZM105.68 263.868C101.38 265.968 96.58 266.968 91.78 266.668C86.78 266.368 81.98 264.868 77.88 262.168L48.28 234.868L88.98 197.868L121.38 233.668L105.68 263.868ZM273.28 235.668C272.08 235.668 270.88 235.468 269.68 235.168C266.18 234.468 263.08 232.868 260.68 230.168L228.48 194.268L272.58 146.368L296.68 218.868C297.88 220.868 298.18 223.368 297.38 225.668C296.48 228.068 294.58 229.968 292.18 230.868C286.08 233.268 279.48 234.768 272.78 235.568L273.28 235.668Z" fill="#E2761B"/>
     <path d="M212.08 210.068L161.38 264.068C153.28 272.468 143.08 278.268 131.68 280.968C129.08 281.668 126.38 282.168 123.68 282.568L122.28 282.768C113.18 284.168 103.78 283.168 94.98 280.068C85.38 276.568 76.98 270.068 70.78 261.268L10.08 174.168C3.58 164.868 0.18 153.768 0.18 142.168V140.068C0.18 138.168 0.18 136.268 0.28 134.368C0.38 132.368 0.58 130.468 0.78 128.568C1.48 120.368 3.58 112.568 7.38 105.768L10.08 102.168C10.68 101.168 11.28 100.268 11.98 99.368L14.08 96.668L43.68 69.868L62.78 94.568L41.88 113.668V118.868L41.88 128.468L62.78 147.268L92.28 120.768L68.58 130.168L78.88 139.568L84.88 139.568L107.08 118.968V94.968L171.18 146.968V122.968L209.68 111.768L199.38 102.368L193.38 102.368L171.18 122.968V122.968L127.38 106.168L167.68 69.868L191.08 60.768H192.38H196.28L220.08 72.368L272.58 128.168L314.08 179.168L284.98 179.168L257.08 133.068L215.78 177.868L247.98 207.368L257.08 199.168V190.168V186.268L272.58 146.368L228.48 194.268L260.68 230.168C263.08 232.868 266.18 234.468 269.68 235.168C270.88 235.468 272.08 235.668 273.28 235.668H273.28L296.68 242.468L313.68 226.768L317.08 218.868V190.168H257.08L247.98 207.368L215.78 177.868L257.08 133.068L284.98 179.168V199.168H257.08L247.98 207.368L212.08 210.068Z" fill="#E2761B"/>
-    <path d="M121.38 233.668L88.98 197.868L48.28 234.868L77.88 262.168C81.98 264.868 86.78 266.368 91.78 266.668C96.58 266.968 101.38 265.968 105.68 263.868Z" fill="#E2761B"/>
+    <path d="M121.38 233.668L88.98 197.868L48.28 234.868L77.88 262.168C81.98 264.868 86.78 266.368 91.78 266.668C96.58 266.968 101.38 265.968 105.68 263.868L121.38 233.668Z" fill="#E2761B"/>
     <path d="M107.08 118.968V94.968L68.58 130.168L78.88 139.568C80.58 141.168 83.08 141.168 84.88 139.568L107.08 118.968Z" fill="#233447"/>
     <path d="M171.18 122.968V146.968L209.68 111.768L199.38 102.368C197.68 100.768 195.18 100.768 193.38 102.368L171.18 122.968Z" fill="#CC6228"/>
     <path d="M62.78 94.568L41.88 113.668C39.08 116.268 39.08 120.768 41.88 123.468V123.468L41.88 128.468L62.78 147.268L92.28 120.768L62.78 94.568Z" fill="#CC6228"/>
@@ -926,7 +939,7 @@ function MarketDetailPage({
                 {/* Safety check before map */}
                 {Array.isArray(market.outcomes) && market.outcomes.map(outcome => (
                   <OutcomeRow 
-                    key={outcome.name} 
+                    key={outcome.id || outcome.name} // Use outcome.id if available
                     outcome={outcome} 
                     onSelectOutcome={onSelectOutcome} 
                   />
@@ -938,6 +951,7 @@ function MarketDetailPage({
 
         {/* Right Column (Trade Panel) */}
         <div className="lg:col-span-1">
+          {/* The TradePanel is now rendered based on `selectedOutcome` state */}
           {selectedOutcome ? (
             <TradePanel
               selectedOutcome={selectedOutcome}
@@ -1024,7 +1038,7 @@ function OpenOrderRow({ order, onCancel }) {
     ? 'text-green-400'
     : 'text-red-400';
 
-  const logoUrl = getLogo(order.platform); 
+  const logoUrl = getLogo(order.platform); // Get logo for platform
 
   return (
     <tr className="hover:bg-gray-900/40 transition-colors">
@@ -1064,7 +1078,7 @@ function OpenOrderRow({ order, onCancel }) {
 }
 
 // --- UPDATED: PortfolioPage Component ---
-function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposit, onWithdraw, onLinkAccounts, onClosePosition }) { 
+function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposit, onWithdraw, onLinkAccounts, onClosePosition }) { // Added onClosePosition
 
   const totalPnlColor = balance?.totalPnl >= 0 ? 'text-green-400' : 'text-red-400';
 
@@ -1139,7 +1153,7 @@ function PortfolioPage({ balance, positions, openOrders, onCancelOrder, onDeposi
             <PositionRow
               key={pos.id}
               position={pos}
-              onClosePosition={onClosePosition} 
+              onClosePosition={onClosePosition} // Pass handler
             />
           ))}
           {positions.length === 0 && (
@@ -2001,8 +2015,8 @@ export default function App() {
   // --- Firebase Auth & Setup (Task 1.4) ---
   useEffect(() => {
     // --- FIX: Check for window.firebase *and* config ---
-    if (!firebaseConfig || !window.firebase) {
-      console.error("Firebase config or core library is missing. Cannot initialize Firestore/Auth.");
+    if (!firebaseConfig || !window.firebase || !window.firebase.app) {
+      console.error("Firebase config or core library (firebase-app.js) is missing. Cannot initialize Firestore/Auth.");
       setIsLoading(false);
       return;
     }
@@ -2014,7 +2028,10 @@ export default function App() {
       setAuthState(user);
       setIsAuthReady(true);
       
-      if (!user) {
+      if (user) {
+         console.log("Firebase Auth user signed in:", user.uid);
+      } else {
+         console.log("Firebase Auth user not signed in. Attempting anonymous sign-in...");
         // Sign in anonymously if not authenticated
         try {
           // --- FIX: Use window.firebase function ---
@@ -2031,17 +2048,29 @@ export default function App() {
         window.firebase.auth.signInWithCustomToken(auth, initialAuthToken).catch(error => {
             console.error("Custom token sign in failed:", error);
         });
+    } else if (!authState) {
+        // If no token and not already auth'd, sign in anon
+         window.firebase.auth.signInAnonymously(auth).catch(e => {
+             console.error("Initial anonymous sign in failed:", e);
+         });
     }
 
     return () => {
       console.log("Unsubscribing from Firebase Auth listener.");
       unsubscribe();
     }
-  }, []);
+  }, []); // Run only once on mount
 
   // --- Portfolio Data Listener (Task 1.4) ---
   useEffect(() => {
-    if (!dbInstance || !currentUserId || !isAuthReady) return;
+    if (!dbInstance || !currentUserId || !isAuthReady) {
+        if(isAuthReady) { // Only log if auth is ready but we're missing other pieces
+           console.log("Firestore listener: Canceled. Missing db, userId, or auth state.", dbInstance, currentUserId, isAuthReady);
+        }
+        return;
+    }
+    console.log("Firestore listener: Attaching...");
+
 
     // --- FIX: Use window.firebase functions ---
     const userDocRef = window.firebase.firestore.doc(dbInstance, "artifacts", appId, "users", currentUserId, "portfolio", "data");
@@ -2064,6 +2093,7 @@ export default function App() {
                 setIsDataSeeded(true);
                 handleAddNotification("Initial portfolio loaded and saved.");
             } else if (!docSnapshot.empty) {
+                console.log("Firestore: Data already seeded.");
                 setIsDataSeeded(true);
             }
         } catch (e) {
@@ -2208,7 +2238,7 @@ export default function App() {
             setPositions(newPositions);
         }
     }
-  }, [markets, currentUserId, dbInstance]); 
+  }, [markets, currentUserId, dbInstance, positions, portfolioBalance.totalPnl]); // Added dependencies
 
 
   // --- Navigation & UI Handlers ---
@@ -2491,7 +2521,7 @@ export default function App() {
 
     if (amount > portfolioBalance.totalUSDC) {
         setToastMessage("Withdrawal failed: Insufficient Smart Wallet funds.");
-        handleAddNotification("Withdrawal failed: Insufficient Smart Wallet funds.");
+        handleAddNotification("Withdrawal failed: Insufficient funds.");
         return;
     }
     
@@ -2569,6 +2599,7 @@ export default function App() {
       
       setToastMessage(`Market close executed! (Simulated)`);
       handleAddNotification(`Sold ${position.shares.toFixed(2)} shares of "${position.outcomeName}". (Simulated)`);
+    
     } else {
       // Limit Close: Add a new limit order for the *opposite* side.
       const oppositeSide = position.side === 'YES' ? 'NO' : 'YES';
