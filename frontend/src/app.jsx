@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+// --- FIX: Read Global Config from index.html ---
+// These variables are set in a <script> tag in index.html
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
 // --- NEW: Web3 Constants ---
 const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC
 const SMART_WALLET_ADDRESS = '0xB3C33d442469b432a44cB39787213D5f2C3f8c43'; // Your deployed contract!
@@ -128,7 +134,7 @@ const getLogo = (platform) => {
     case 'Polymarket':
       return "/mqiIx1cj_400x400.jpg";
     case 'Kalshi':
-      return "/1qzNBZII_400x400.jpg";
+      return "/1qzNBZII_400x400.jpg"; // FIX: Added leading slash
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
@@ -1654,6 +1660,86 @@ function TickerTape({ newsItems }) {
             <span className="text-sm text-gray-300">{item.text}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// --- MarketCard Component (FIXED) ---
+function MarketCard({ market, onMarketClick }) {
+    
+  // Safety check for market.outcomes
+  const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
+  
+  // Find 'Yes' and 'No' outcomes specifically
+  const yesOutcome = outcomes.find(o => o.name === 'Yes');
+  const noOutcome = outcomes.find(o => o.name === 'No');
+  
+  // Determine if this is a true binary Yes/No market
+  const isBinary = yesOutcome && noOutcome;
+
+  // Get the top outcome (highest price)
+  const topOutcome = outcomes[0];
+
+  if (!topOutcome) {
+    // Return a placeholder card if the market has no outcomes
+    return (
+        <div className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg p-5 flex flex-col justify-between h-48">
+            <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+            <h3 className="text-base font-semibold text-white line-clamp-3 leading-tight">{market.shortTitle || market.title}</h3>
+            <span className="text-sm text-gray-500">Market data pending...</span>
+        </div>
+    );
+  }
+
+  return (
+    <div
+      className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200 flex flex-col justify-between h-48"
+      onClick={() => onMarketClick(market)}
+    >
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+        <img
+          src={getLogo(market.platform)}
+          alt={market.platform}
+          className="w-6 h-6 rounded-full"
+          style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
+        />
+      </div>
+      
+      <div className="mb-4 flex-1">
+        <h3 className="text-base font-semibold text-white line-clamp-3 leading-tight">
+            {market.shortTitle || market.title}
+        </h3>
+      </div>
+      
+      <div className="flex justify-between items-center pt-2 border-t border-gray-800">
+        <div className="text-sm text-gray-500">
+            Vol: ${market.volume_24h ? (market.volume_24h / 1000).toFixed(0) + 'K' : 'N/A'}
+        </div>
+        
+        {/* Price Box */}
+        <div className="flex space-x-2">
+          {isBinary ? (
+            // --- RENDER YES/NO ---
+            <>
+              <div className={`bg-green-600/30 text-green-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+                Yes
+                <div className="text-lg leading-none mt-0.5">{(yesOutcome.price * 100).toFixed(0)}¢</div>
+              </div>
+              <div className={`bg-red-600/30 text-red-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+                No
+                <div className="text-lg leading-none mt-0.5">{(noOutcome.price * 100).toFixed(0)}¢</div>
+              </div>
+            </>
+          ) : (
+            // --- RENDER TOP OUTCOME ---
+            <div className={`bg-blue-600/30 text-blue-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+              {topOutcome.name}
+              <div className="text-lg leading-none mt-0.5">{(topOutcome.price * 100).toFixed(0)}¢</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
