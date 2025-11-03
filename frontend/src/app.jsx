@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { MarketChart } from './MarketChart.jsx';
+import React, { useState, useEffect, useRef } from 'react';
 
 // --- NEW: Web3 Constants ---
 const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC
@@ -13,19 +12,15 @@ const USDC_ABI = [
 ];
 
 
-// --- API LOGIC (Category-based fetching) ---
-export const fetchMarketsByCategory = async (category, setToastMessage) => {
-  console.log(`Fetching markets for category: ${category}`);
+// --- API LOGIC (Moved from api.js) ---
+export const fetchMarkets = async (setToastMessage) => {
+  console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // Use special endpoint for Trending
-  let API_URL;
-  if (category.toLowerCase() === 'trending') {
-    API_URL = 'http://92.246.141.205:3001/api/markets/trending';
-  } else {
-    API_URL = `http://92.246.141.205:3001/api/markets/${category}`;
-  }
+  // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
+  const API_URL = 'http://92.246.141.205:3001/api/markets';
   
-  await new Promise(resolve => setTimeout(resolve, 300));
+  // Added a brief delay to prevent spamming failed requests
+  await new Promise(resolve => setTimeout(resolve, 500));
 
   try {
     const response = await fetch(API_URL);
@@ -33,93 +28,34 @@ export const fetchMarketsByCategory = async (category, setToastMessage) => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    console.log(`Successfully fetched ${data.length} markets for ${category}`);
+    console.log("Successfully fetched LIVE data:", data);
     return data;
   } catch (error) {
-    console.error(`Failed to fetch markets for ${category}:`, error);
+    console.error("Failed to fetch LIVE markets from backend. Using mock data as fallback:", error);
+    
     if (setToastMessage) {
-      setToastMessage(`Error loading ${category} markets`);
+        setToastMessage("Server Error: Cannot connect to backend. Showing simulation.");
     }
-    return [];
+    
+    // Fallback to mock data
+    const mockData = [
+      { id: 1, category: 'Politics', title: 'Will Donald Trump win the 2024 US election?', platform: 'Polymarket', yes: 0.52, no: 0.48 },
+      { id: 2, category: 'Crypto', title: 'Will Bitcoin (BTC) be above $100,000 on Dec 31, 2025?', platform: 'Kalshi', yes: 0.47, no: 0.53 },
+      { id: 3, category: 'Crypto', title: 'Will Ethereum (ETH) be above $10,000 on Dec 31, 2025?', platform: 'Limitless', yes: 0.31, no: 0.69 },
+      { id: 4, category: 'Politics', title: 'Will the next UK Prime Minister be from the Labour Party?', platform: 'Polymarket', yes: 0.78, no: 0.22 },
+      { id: 5, category: 'Sports', title: 'Will the LA Lakers win the 2026 NBA Championship?', platform: 'Polymarket', yes: 0.15, no: 0.85 },
+      { id: 6, category: 'Crypto', title: 'Will a spot Solana (SOL) ETF be approved in 2025?', platform: 'Limitless', yes: 0.60, no: 0.40 },
+    ];
+    // Ensure fallback data has the new 'outcomes' structure
+    return mockData.map(m => ({
+        ...m,
+        outcomes: [
+            { name: 'Yes', price: m.yes, history: [] },
+            { name: 'No', price: m.no, history: [] }
+        ]
+    }));
   }
 };
-
-// --- NEW: Fetch live market price for trading ---
-export const fetchLiveMarketPrice = async (marketId, setToastMessage) => {
-  console.log(`🔴 Fetching LIVE price for market: ${marketId}`);
-
-  const API_URL = `http://92.246.141.205:3001/api/market/${marketId}/live`;
-
-  try {
-    const response = await fetch(API_URL);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    const data = await response.json();
-    console.log(`🔴 LIVE price fetched in ${data.fetchTime}ms`);
-    return data.market;
-  } catch (error) {
-    console.error(`Failed to fetch live price for ${marketId}:`, error);
-    if (setToastMessage) {
-      setToastMessage(`Error loading live price`);
-    }
-    return null;
-  }
-};
-
-// --- Legacy function (for backward compatibility) ---
-export const fetchMarkets = async (setToastMessage) => {
-  return fetchMarketsByCategory('All', setToastMessage);
-};
-
-// --- NEW: Custom hook for live price updates ---
-function useLivePrice(marketId, refreshInterval = 5000) {
-  const [liveMarket, setLiveMarket] = useState(null);
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    if (!marketId) return;
-
-    let isMounted = true;
-
-    const fetchPrice = async () => {
-      try {
-        setIsLoading(true);
-        const market = await fetchLiveMarketPrice(marketId);
-        
-        if (isMounted && market) {
-          setLiveMarket(market);
-          setLastUpdate(new Date());
-          setError(null);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setError(err.message);
-          console.error('Live price fetch error:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    // Initial fetch
-    fetchPrice();
-
-    // Set up interval for auto-refresh
-    const interval = setInterval(fetchPrice, refreshInterval);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [marketId, refreshInterval]);
-
-  return { liveMarket, lastUpdate, isLoading, error };
-}
 
 // --- Helper for Unique IDs (Fixes crypto.randomUUID() crash) ---
 const generateUniqueId = () => Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
@@ -185,13 +121,14 @@ const mockReferralData = {
 
 // --- Helper function for logos (FIXED IMAGE PATHS) ---
 const getLogo = (platform) => {
+  // Using external URLs for platform logos
   switch (platform) {
     case 'Limitless':
-      return "https://placehold.co/32x32/3B82F6/FFFFFF?text=L";
+      return "https://pbs.twimg.com/profile_images/1831757906869542912/fLHeW0Ji_400x400.jpg";
     case 'Polymarket':
-      return "https://placehold.co/32x32/95b89b/FFFFFF?text=P"; // Green Polymarket icon
+      return "https://pbs.twimg.com/profile_images/1716879445605154816/mqiIx1cj_400x400.jpg";
     case 'Kalshi':
-      return "https://placehold.co/32x32/10B981/FFFFFF?text=K";
+      return "https://pbs.twimg.com/profile_images/1598726375776698368/1qzNBZII_400x400.jpg";
     default:
       return "https://placehold.co/24x24/808080/FFFFFF?text=?";
   }
@@ -225,73 +162,6 @@ const fetchChartData = (marketId, platform) => {
 };
 
 
-// --- SORTING FUNCTIONS ---
-
-// Sort by Volume (using volume_24h field)
-function sortByVolume(markets, direction) {
-  return [...markets].sort((a, b) => {
-    // Try volume_24h first, then totalVolume as fallback
-    const volA = a.volume_24h || a.totalVolume || 0;
-    const volB = b.volume_24h || b.totalVolume || 0;
-    return direction === 'asc' ? volA - volB : volB - volA;
-  });
-}
-
-// Sort by Probability (highest outcome price)
-function sortByProbability(markets, direction) {
-  return [...markets].sort((a, b) => {
-    // Get highest outcome probability
-    const probA = Math.max(...(a.outcomes?.map(o => o.price) || [0]));
-    const probB = Math.max(...(b.outcomes?.map(o => o.price) || [0]));
-    return direction === 'asc' ? probA - probB : probB - probA;
-  });
-}
-
-// Sort by Liquidity (using volume_24h as proxy)
-function sortByLiquidity(markets, direction) {
-  // Same as volume for now (using volume_24h as liquidity proxy)
-  return sortByVolume(markets, direction);
-}
-
-// Sort by Closing Time (endDate field)
-function sortByClosingTime(markets, direction) {
-  return [...markets].sort((a, b) => {
-    const dateA = a.endDate ? new Date(a.endDate).getTime() : Infinity;
-    const dateB = b.endDate ? new Date(b.endDate).getTime() : Infinity;
-    return direction === 'asc' ? dateA - dateB : dateB - dateA;
-  });
-}
-
-// Unified sorting function
-function applySorting(markets, filterType, direction) {
-  if (!filterType) return markets;
-  
-  console.log(`[FILTER] Applying ${filterType} filter (${direction})`);
-  
-  // Log sample volumes for debugging
-  if (filterType === 'volume' || filterType === 'liquidity') {
-    const sampleMarkets = markets.slice(0, 5);
-    console.log('[FILTER] Sample volumes:', sampleMarkets.map(m => ({
-      title: m.shortTitle || m.title?.substring(0, 30),
-      volume_24h: m.volume_24h,
-      totalVolume: m.totalVolume
-    })));
-  }
-  
-  switch (filterType) {
-    case 'volume':
-      return sortByVolume(markets, direction);
-    case 'probability':
-      return sortByProbability(markets, direction);
-    case 'liquidity':
-      return sortByLiquidity(markets, direction);
-    case 'closing':
-      return sortByClosingTime(markets, direction);
-    default:
-      return markets;
-  }
-}
-
 // --- END OF API LOGIC ---
 
 
@@ -300,18 +170,6 @@ function applySorting(markets, filterType, direction) {
 const SearchIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-  </svg>
-);
-
-const NetworkBarsIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-    <path d="M3 18h2v2H3v-2zm4-4h2v6H7v-6zm4-4h2v10h-2V10zm4-4h2v14h-2V6zm4-4h2v18h-2V2z" />
-  </svg>
-);
-
-const FilterIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
   </svg>
 );
 
@@ -408,153 +266,6 @@ const RabbyIcon = () => (
 // ====================================================================
 // START OF COMPONENTS (Defined before App)
 // ====================================================================
-
-// --- FilterButton Component ---
-function FilterButton({ filter, isActive, sortDirection, onClick, theme }) {
-  const baseClass = `px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 whitespace-nowrap`;
-  
-  const activeClass = theme === 'dark' 
-    ? 'bg-blue-600 text-white' 
-    : 'bg-[#95b89b] text-white';
-  
-  const inactiveClass = theme === 'dark'
-    ? 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-    : 'bg-gray-100 text-gray-700 hover:bg-gray-200';
-  
-  return (
-    <button
-      onClick={onClick}
-      className={`${baseClass} ${isActive ? activeClass : inactiveClass}`}
-    >
-      {filter.icon && <span>{filter.icon}</span>}
-      <span>{filter.label}</span>
-      {isActive && (
-        <span className="text-lg">
-          {sortDirection === 'asc' ? '↑' : '↓'}
-        </span>
-      )}
-    </button>
-  );
-}
-
-// --- MarketImage Component ---
-function MarketImage({ imageUrl, alt, size = 'medium', theme = 'dark' }) {
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
-
-  // Size configurations
-  const sizeClasses = {
-    small: 'w-12 h-12',
-    medium: 'w-32 h-32',
-    large: 'w-48 h-48'
-  };
-
-  const handleLoad = () => {
-    setIsLoading(false);
-    setHasError(false);
-  };
-
-  const handleError = () => {
-    setIsLoading(false);
-    setHasError(true);
-  };
-
-  // Placeholder colors based on theme
-  const placeholderBg = theme === 'dark' ? 'bg-gray-800' : 'bg-gray-200';
-  const placeholderText = theme === 'dark' ? 'text-gray-600' : 'text-gray-400';
-
-  if (!imageUrl || hasError) {
-    // Show placeholder
-    return (
-      <div className={`${sizeClasses[size]} ${placeholderBg} rounded-lg flex items-center justify-center`}>
-        <svg className={`${size === 'small' ? 'w-6 h-6' : size === 'medium' ? 'w-16 h-16' : 'w-24 h-24'} ${placeholderText}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`${sizeClasses[size]} relative`}>
-      {isLoading && (
-        <div className={`absolute inset-0 ${placeholderBg} rounded-lg animate-pulse`}></div>
-      )}
-      <img
-        src={imageUrl}
-        alt={alt}
-        onLoad={handleLoad}
-        onError={handleError}
-        className={`${sizeClasses[size]} rounded-lg object-cover ${isLoading ? 'opacity-0' : 'opacity-100'} transition-opacity duration-300`}
-        loading="lazy"
-      />
-    </div>
-  );
-}
-
-// --- TimeProgressBar Component ---
-function TimeProgressBar({ startDate, endDate, theme = 'dark' }) {
-  const [percentage, setPercentage] = useState(0);
-
-  useEffect(() => {
-    const calculateProgress = () => {
-      if (!startDate || !endDate) return 0;
-
-      const start = new Date(startDate).getTime();
-      const end = new Date(endDate).getTime();
-      const now = Date.now();
-
-      // Handle edge cases
-      if (now < start) return 0; // Market hasn't started yet
-      if (now > end) return 100; // Market has ended
-
-      // Calculate percentage
-      const totalDuration = end - start;
-      const elapsed = now - start;
-      const progress = (elapsed / totalDuration) * 100;
-
-      return Math.min(100, Math.max(0, progress));
-    };
-
-    // Initial calculation
-    setPercentage(calculateProgress());
-
-    // Update every minute
-    const interval = setInterval(() => {
-      setPercentage(calculateProgress());
-    }, 60000); // 60 seconds
-
-    return () => clearInterval(interval);
-  }, [startDate, endDate]);
-
-  // Render 20 bar characters with wider bars
-  const totalBars = 20;
-  const filledBars = Math.floor((percentage / 100) * totalBars);
-  
-  const bars = Array.from({ length: totalBars }, (_, i) => {
-    const isFilled = i < filledBars;
-    return (
-      <span
-        key={i}
-        className={`${isFilled ? 'text-green-400' : 'text-gray-600'} text-lg`}
-      >
-        |
-      </span>
-    );
-  });
-
-  const textColor = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex font-mono tracking-wider">
-        {bars}
-      </div>
-      <span className={`text-xs ${textColor}`}>
-        {percentage.toFixed(0)}%
-      </span>
-    </div>
-  );
-}
 
 // --- Custom Hook for Simulated Live Data (FIXED) ---
 function useSimulatedWebSocket(markets, setMarkets, handleAddNotification) {
@@ -660,7 +371,37 @@ function useSimulatedWebSocket(markets, setMarkets, handleAddNotification) {
 }
 
 
-// --- Chart component moved to MarketChart.jsx ---
+// --- NEW: Simulated Price Chart Component ---
+function SimulatedPriceChart({ data }) {
+  // A simple SVG chart. A real app would use a library like lightweight-charts.
+  const svgWidth = 500;
+  const svgHeight = 300;
+
+  const prices = data.map(d => d.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  const priceRange = maxPrice - minPrice || 1; // Prevent division by zero
+
+  // Create path string
+  const path = data.map((d, i) => {
+    const x = (i / (data.length - 1)) * svgWidth;
+    const y = svgHeight - ((d.price - minPrice) / priceRange) * svgHeight;
+    return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+  }).join(' ');
+
+  return (
+    <div className="w-full h-full flex items-center justify-center">
+      <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-full">
+        <path
+          d={path}
+          fill="none"
+          stroke="#3B82F6" // Blue-600
+          strokeWidth="2"
+        />
+      </svg>
+    </div>
+  );
+}
 
 // --- Simulated Order Book Component ---
 function SimulatedOrderBook({ onPriceClick }) {
@@ -741,36 +482,22 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
   const [limitPrice, setLimitPrice] = useState('');   
   const [limitShares, setLimitShares] = useState('');   
 
-  // NEW: Fetch live prices for trading (auto-refreshes every 5 seconds)
-  const { liveMarket, lastUpdate, isLoading, error } = useLivePrice(market?.id, 5000);
-
-  // Use live market data if available, otherwise fall back to cached market
-  const activeMarket = liveMarket || market;
-  const activeOutcome = liveMarket 
-    ? liveMarket.outcomes.find(o => o.name === selectedOutcome?.name) || selectedOutcome
-    : selectedOutcome;
-
-  // Calculate trade price based on live data
+  // FIX: This logic was flawed. It needs to calculate based on the *selected outcome* and *side*.
   const tradePrice = React.useMemo(() => {
-    if (!activeOutcome) return 0;
-    return (side === 'YES') ? activeOutcome.price : (1 - activeOutcome.price);
-  }, [activeOutcome, side]);
+    if (!selectedOutcome) return 0;
+    return (side === 'YES') ? selectedOutcome.price : (1 - selectedOutcome.price);
+  }, [selectedOutcome, side]);
 
   useEffect(() => {
-    if (activeOutcome) {
+    if (selectedOutcome) {
       setTradeType('Market');
       setMarketAmount('');
       setLimitShares('');
       setLimitPrice(tradePrice.toFixed(2));
     }
-  }, [activeOutcome, side, tradePrice]);
+  }, [selectedOutcome, side, tradePrice]);
 
   if (!market || !selectedOutcome) return null; // Safety check
-
-  // Calculate time since last update
-  const timeSinceUpdate = lastUpdate 
-    ? Math.floor((Date.now() - lastUpdate.getTime()) / 1000)
-    : null;
 
   const marketPayout = (marketAmount > 0 && tradePrice > 0) ? (marketAmount / tradePrice).toFixed(2) : 0;
   const limitCost = (limitPrice > 0 && limitShares > 0) ? (limitPrice * limitShares).toFixed(2) : 0;
@@ -833,43 +560,16 @@ function TradePanel({ market, side, onSubmit, onSideChange, userAddress, onConne
       <div
         className="bg-gray-950 border border-gray-800 rounded-2xl shadow-xl w-full p-6 relative"
       >
-        {/* --- NEW: LIVE Price Indicator --- */}
-        <div className="mb-4 flex items-center justify-between bg-gray-800/50 rounded-lg p-3 border border-gray-700">
-          <div className="flex items-center space-x-2">
-            {isLoading ? (
-              <>
-                <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-                <span className="text-xs text-gray-400">Loading live prices...</span>
-              </>
-            ) : error ? (
-              <>
-                <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                <span className="text-xs text-red-400">Using cached prices</span>
-              </>
-            ) : (
-              <>
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs text-green-400 font-medium">🔴 LIVE</span>
-              </>
-            )}
-          </div>
-          {lastUpdate && !isLoading && (
-            <span className="text-xs text-gray-500">
-              Updated {timeSinceUpdate}s ago
-            </span>
-          )}
-        </div>
-
         {/* --- NEW: YES/NO Side Toggle --- */}
         <div className="flex w-full bg-gray-800 rounded-lg p-1 mb-6">
           <button
-            onClick={() => onSideChange(activeOutcome, 'YES')}
+            onClick={() => onSideChange(selectedOutcome, 'YES')}
             className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'YES' ? 'bg-green-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
           >
             YES
           </button>
           <button
-            onClick={() => onSideChange(activeOutcome, 'NO')}
+            onClick={() => onSideChange(selectedOutcome, 'NO')}
             className={`w-1/2 py-2 rounded-md text-sm font-medium transition-colors ${side === 'NO' ? 'bg-red-600/80 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
           >
             NO
@@ -1052,44 +752,18 @@ function MarketDetailPage({
   selectedOutcome,
   onSelectOutcome,
   tradeSide,
-  onCloseTradePanel,
-  theme = 'dark'
+  onCloseTradePanel
 }) {
-  
-  // Theme-aware text colors
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
-  const textEmphasis = theme === 'dark' ? 'text-white' : 'text-gray-900';
   
   if (!market || !Array.isArray(market.outcomes)) {
     return (
       <main className="flex-1 overflow-y-auto p-8 flex justify-center items-center">
-         <p className={textSecondary}>Market data not found.</p>
+         <p className="text-gray-400">Market data not found.</p>
       </main>
     );
   }
 
   const isBinary = market.outcomes.length === 2 && market.outcomes.some(o => o.name === 'Yes') && market.outcomes.some(o => o.name === 'No');
-
-  // Format volume
-  const formattedVolume = market.totalVolume 
-    ? `$${Math.round(market.totalVolume).toLocaleString()}` 
-    : market.volume_24h 
-    ? `$${Math.round(market.volume_24h).toLocaleString()}`
-    : '$0';
-
-  // Format resolution date
-  const formatResolutionDate = (dateStr) => {
-    if (!dateStr) return 'Resolution date TBD';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
-    });
-  };
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -1099,49 +773,15 @@ function MarketDetailPage({
         <span>Back to All Markets</span>
       </button>
 
-      {/* Enhanced Header with Image */}
-      <div className="flex items-start gap-6 mb-6">
-        <MarketImage 
-          imageUrl={market.image} 
-          alt={market.title}
-          size="medium"
-          theme="dark"
+      {/* Header */}
+      <div className="flex items-center space-x-3 mb-6">
+        <img
+          src={getLogo(market.platform)}
+          alt={market.platform}
+          className="w-8 h-8 rounded-full"
+          style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
         />
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <img
-              src={getLogo(market.platform)}
-              alt={market.platform}
-              className="w-6 h-6 rounded-full"
-              style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
-            />
-            <span className="text-sm text-gray-400">{market.platform}</span>
-          </div>
-          <h1 className={`text-3xl font-bold ${textPrimary} mb-4`}>{market.title}</h1>
-          
-          {/* Volume and Resolution Info */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className={`text-sm ${theme === 'dark' ? textSecondary : 'text-[#95b89b]'}`}>Historic Volume:</span>
-              <span className={`text-lg font-semibold ${textEmphasis}`}>{formattedVolume}</span>
-            </div>
-            
-            {market.endDate && (
-              <div className="flex items-center gap-4">
-                <span className={`text-sm ${textSecondary}`}>
-                  End Date: {formatResolutionDate(market.endDate)}
-                </span>
-                <div className="ml-4">
-                  <TimeProgressBar 
-                    startDate={market.startDate} 
-                    endDate={market.endDate}
-                    theme={theme}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold text-white">{market.title}</h1>
       </div>
 
       {/* Main Grid: Chart/Details on Left, Trade Panel on Right */}
@@ -1150,11 +790,11 @@ function MarketDetailPage({
         {/* Left Column */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Price Chart */}
-          <div className={`rounded-lg p-6 ${theme === 'dark' ? 'bg-gray-950 border border-gray-800' : 'bg-white border border-gray-200'}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              {isBinary ? 'Probability Chart' : 'Odds Chart'}
+          <div className="bg-gray-950 border border-gray-800 rounded-lg p-6">
+            <h2 className="text-xl font-semibold text-white mb-4">
+              {isBinary ? '7-Day Probability Chart' : '7-Day Odds Chart'}
             </h2>
-            <MarketChart outcomes={market.outcomes} theme={theme} />
+            <SimulatedPriceChart data={generateChartData()} /> {/* Fallback for live data */}
           </div>
 
           {/* Outcomes List */}
@@ -1181,18 +821,6 @@ function MarketDetailPage({
               </tbody>
             </table>
           </div>
-
-          {/* Polymarket Link Button */}
-          {market.polymarketUrl && (
-            <a
-              href={market.polymarketUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white text-center py-4 rounded-lg font-semibold transition-all duration-200 shadow-lg hover:shadow-xl"
-            >
-              Full Details on Polymarket →
-            </a>
-          )}
         </div>
 
         {/* Right Column (Trade Panel) */}
@@ -1508,56 +1136,43 @@ function LinkAccountsPage({ onBack }) {
 }
 
 // --- Leaderboard Page ---
-function LeaderboardPage({ leaderboardData, theme = 'dark' }) { 
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
-  const bgCard = theme === 'dark' ? 'bg-gray-950 border-gray-800' : 'bg-green-50/30 backdrop-blur-sm border-green-200/50';
-  const borderColor = theme === 'dark' ? 'border-gray-800' : 'border-green-200/30';
-  const hoverBg = theme === 'dark' ? 'hover:bg-gray-900/40' : 'hover:bg-green-100/40';
-  
+function LeaderboardPage({ leaderboardData }) { 
   return (
     <main className="flex-1 overflow-y-auto p-8">
-      <h1 className={`text-3xl font-bold ${textPrimary} mb-8`}>Leaderboard: Top Traders</h1>
+      <h1 className="text-3xl font-bold text-white mb-8">Leaderboard: Top Traders</h1>
 
-      <div className={`${bgCard} border rounded-lg overflow-hidden max-w-3xl`}>
+      <div className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden max-w-3xl">
         <table className="w-full table-auto">
-          <thead className={`border-b ${borderColor}`}>
+          <thead className="border-b border-gray-800">
             <tr>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${textSecondary} uppercase`}>Rank</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${textSecondary} uppercase`}>User Address</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${textSecondary} uppercase`}>Total P&L</th>
-              <th className={`px-4 py-3 text-left text-xs font-medium ${textSecondary} uppercase`}>Total Volume</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Rank</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">User Address</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total P&L</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Total Volume</th>
             </tr>
           </thead>
-          <tbody className={`divide-y ${borderColor}`}>
+          <tbody className="divide-y divide-gray-800">
             {leaderboardData.map((trader, index) => ( 
-              <tr key={trader.rank} className={`${hoverBg} transition-colors`}>
-                <td className={`px-4 py-4 text-sm font-bold ${theme === 'dark' ? 'text-blue-400' : 'text-green-600'}`}>{trader.rank}</td>
-                <td className={`px-4 py-4 text-sm ${textPrimary}`}>{trader.user}</td>
+              <tr key={trader.rank} className="hover:bg-gray-900/40 transition-colors">
+                <td className="px-4 py-4 text-sm font-bold text-blue-400">{trader.rank}</td>
+                <td className="px-4 py-4 text-sm text-white">{trader.user}</td>
                 <td className={`px-4 py-4 text-sm font-medium ${trader.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {trader.pnl >= 0 ? '+' : ''}{trader.pnl.toFixed(2)}
                 </td>
-                <td className={`px-4 py-4 text-sm ${textSecondary}`}>${trader.volume.toLocaleString()}</td>
+                <td className="px-4 py-4 text-sm text-gray-300">${trader.volume.toLocaleString()}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className={`mt-4 text-sm ${textSecondary}`}>Note: Data is simulated for demonstration purposes.</p>
+      <p className="mt-4 text-sm text-gray-500">Note: Data is simulated for demonstration purposes.</p>
     </main>
   );
 }
 
 // --- Referrals Page ---
-function ReferralsPage({setToastMessage, theme = 'dark'}) {
+function ReferralsPage({setToastMessage}) {
   const { referralCode, referredUsers, totalEarnings, commissionRate } = mockReferralData;
-
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
-  const bgCard = theme === 'dark' ? 'bg-gray-950 border-gray-800' : 'bg-green-50/30 backdrop-blur-sm border-green-200/50';
-  const bgInner = theme === 'dark' ? 'bg-gray-900 border-gray-700' : 'bg-white/50 border-green-200/40';
-  const bgStat = theme === 'dark' ? 'bg-black border-gray-800' : 'bg-white/60 border-green-200/40';
-  const buttonBg = theme === 'dark' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700';
 
   const copyToClipboard = () => {
     try {
@@ -1575,40 +1190,40 @@ function ReferralsPage({setToastMessage, theme = 'dark'}) {
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
-      <h1 className={`text-3xl font-bold ${textPrimary} mb-8`}>Referrals</h1>
+      <h1 className="text-3xl font-bold text-white mb-8">Referrals</h1>
 
-      <div className={`${bgCard} border rounded-lg p-6 max-w-3xl`}>
-        <h2 className={`text-xl font-semibold ${textPrimary} mb-4`}>Your Referral Link</h2>
+      <div className="bg-gray-950 border border-gray-800 rounded-lg p-6 max-w-3xl">
+        <h2 className="text-xl font-semibold text-white mb-4">Your Referral Link</h2>
 
-        <div className={`flex flex-col md:flex-row items-center gap-4 ${bgInner} border p-4 rounded-lg mb-6`}>
-          <code className={`flex-1 text-lg font-mono ${theme === 'dark' ? 'text-blue-400' : 'text-green-600'} truncate bg-transparent border-none outline-none`}>
+        <div className="flex flex-col md:flex-row items-center gap-4 bg-gray-900 border border-gray-700 p-4 rounded-lg mb-6">
+          <code className="flex-1 text-lg font-mono text-blue-400 truncate bg-transparent border-none outline-none">
             {referralCode}
           </code>
           <button
             onClick={copyToClipboard}
-            className={`${buttonBg} text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors`}
+            className="bg-blue-600 text-white text-sm font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
           >
             Copy Link
           </button>
         </div>
 
-        <p className={`text-sm ${textSecondary} mb-8`}>
+        <p className="text-sm text-gray-400 mb-8">
           Share your unique referral code with friends. You will earn {commissionRate} commission on their platform trading fees.
         </p>
 
-        <h2 className={`text-xl font-semibold ${textPrimary} mb-4`}>Your Statistics</h2>
+        <h2 className="text-xl font-semibold text-white mb-4">Your Statistics</h2>
         <div className="grid grid-cols-3 gap-4">
-          <div className={`${bgStat} border rounded-lg p-4`}>
-            <p className={`text-xs ${textSecondary}`}>Referred Users</p>
-            <p className={`text-2xl font-bold ${textPrimary} mt-1`}>{referredUsers}</p>
+          <div className="bg-black border border-gray-800 rounded-lg p-4">
+            <p className="text-xs text-gray-400">Referred Users</p>
+            <p className="text-2xl font-bold text-white mt-1">{referredUsers}</p>
           </div>
-          <div className={`${bgStat} border rounded-lg p-4`}>
-            <p className={`text-xs ${textSecondary}`}>Total Earnings</p>
+          <div className="bg-black border border-gray-800 rounded-lg p-4">
+            <p className="text-xs text-gray-400">Total Earnings</p>
             <p className="text-2xl font-bold text-green-400 mt-1">${totalEarnings.toFixed(2)}</p>
           </div>
-          <div className={`${bgStat} border rounded-lg p-4`}>
-            <p className={`text-xs ${textSecondary}`}>Commission Rate</p>
-            <p className={`text-2xl font-bold ${textPrimary} mt-1`}>{commissionRate}</p>
+          <div className="bg-black border border-gray-800 rounded-lg p-4">
+            <p className="text-xs text-gray-400">Commission Rate</p>
+            <p className="text-2xl font-bold text-white mt-1">{commissionRate}</p>
           </div>
         </div>
       </div>
@@ -1944,21 +1559,13 @@ function ClosePositionModal({ isOpen, onClose, position, market, onConfirmClose 
 
 
 // --- Header Component ---
-function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onConnect, onDisconnect, onBellClick, notifCount, portfolioBalance, theme, onThemeToggle }) {
+function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onConnect, onDisconnect, onBellClick, notifCount }) {
   const getButtonClass = (item) => {
-    if (theme === 'dark') {
-      return `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-        activeNav === item
-          ? 'bg-blue-600 text-white'
-          : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-      }`;
-    } else {
-      return `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-        activeNav === item
-          ? 'bg-green-500 text-white'
-          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-      }`;
-    }
+    return `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+      activeNav === item
+        ? 'bg-gray-800 text-white'
+        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+    }`;
   };
 
   const renderWalletButton = () => {
@@ -1986,7 +1593,7 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
         return (
           <button
             onClick={onConnect}
-            className={`${theme === 'light' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-800 hover:bg-blue-700'} text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2`}
+            className="bg-blue-800 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center space-x-2"
           >
             <WalletIcon />
             <span>Connect Wallet</span>
@@ -1996,12 +1603,12 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
   };
 
   return (
-    <header className={`sticky top-0 z-30 ${theme === 'dark' ? 'bg-[#131B2E] border-b border-gray-800' : 'bg-white border-b border-gray-200 shadow-sm'}`}>
+    <header className="bg-gray-950 border-b border-gray-800 sticky top-0 z-30">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-8">
-            <h1 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              Tanner<span className={theme === 'dark' ? 'text-blue-400' : 'text-green-500'}>.xyz</span>
+            <h1 className="text-2xl font-bold text-white">
+              Tanner<span className="text-blue-400">.xyz</span>
             </h1>
             <nav className="hidden md:flex space-x-4">
               {navItems.map((item) => (
@@ -2016,59 +1623,6 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
             </nav>
           </div>
           <div className="flex items-center space-x-4">
-            {/* Portfolio Value Bar */}
-            {userAddress && (
-              <div className="hidden md:flex items-center bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
-                <span className="text-xs text-gray-400 mr-2">Portfolio:</span>
-                <span className="text-sm font-bold text-green-400">
-                  ${portfolioBalance.totalValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            )}
-            
-            {/* Theme Toggle - Pill Switch */}
-            <button
-              onClick={onThemeToggle}
-              className={`relative flex items-center rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                theme === 'dark' 
-                  ? 'bg-gray-800 focus:ring-blue-500 w-40' 
-                  : 'bg-gray-200 focus:ring-gray-400 w-36'
-              }`}
-              style={{ height: '40px' }}
-              aria-label="Toggle theme"
-            >
-              {/* Sliding Circle */}
-              <div
-                className={`absolute top-1 w-8 h-8 rounded-full bg-white shadow-md transition-all duration-300 flex items-center justify-center ${
-                  theme === 'dark' ? 'left-1' : 'right-1'
-                }`}
-              >
-                {theme === 'dark' ? (
-                  // Moon icon with stars
-                  <svg className="w-5 h-5 text-gray-800" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-                    <circle cx="19" cy="5" r="1" />
-                    <circle cx="17" cy="8" r="0.5" />
-                  </svg>
-                ) : (
-                  // Sun icon
-                  <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="4" />
-                    <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" strokeWidth="2" strokeLinecap="round" />
-                  </svg>
-                )}
-              </div>
-              
-              {/* Text Label */}
-              <span className={`font-semibold text-sm transition-all duration-300 ${
-                theme === 'dark' 
-                  ? 'text-white ml-11' 
-                  : 'text-gray-800 mr-11 ml-2'
-              }`}>
-                {theme === 'dark' ? 'NIGHT MODE' : 'DAY MODE'}
-              </span>
-            </button>
-            
             <button onClick={onBellClick} className="relative text-gray-400 hover:text-white p-2 rounded-full hover:bg-gray-700">
               <BellIcon />
               {notifCount > 0 && (
@@ -2086,9 +1640,9 @@ function Header({ navItems, activeNav, onNavClick, walletState, userAddress, onC
 }
 
 // --- TickerTape Component ---
-function TickerTape({ newsItems, theme = 'dark' }) {
+function TickerTape({ newsItems }) {
   return (
-    <div className={`border-b h-12 flex items-center overflow-hidden ${theme === 'dark' ? 'bg-gray-900 border-gray-800' : 'bg-[#95b89b] border-[#7a9c7f]'}`}>
+    <div className="bg-gray-900 border-b border-gray-800 h-12 flex items-center overflow-hidden">
       <div className="flex animate-marquee whitespace-nowrap">
         {newsItems.concat(newsItems).map((item, index) => (
           <div key={index} className="flex items-center mx-6">
@@ -2098,7 +1652,7 @@ function TickerTape({ newsItems, theme = 'dark' }) {
               className="w-5 h-5 rounded-full mr-2"
               style={item.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
             />
-            <span className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-900'}`}>{item.text}</span>
+            <span className="text-sm text-gray-300">{item.text}</span>
           </div>
         ))}
       </div>
@@ -2107,235 +1661,100 @@ function TickerTape({ newsItems, theme = 'dark' }) {
 }
 
 // --- MarketCard Component (FIXED) ---
-function MarketCard({ market, onMarketClick, theme = 'dark' }) {
+function MarketCard({ market, onMarketClick }) {
+    
+  // Safety check for market.outcomes
   const outcomes = Array.isArray(market.outcomes) ? market.outcomes : [];
   
-  // Find Yes/No for binary markets
+  // Find 'Yes' and 'No' outcomes specifically
   const yesOutcome = outcomes.find(o => o.name === 'Yes');
   const noOutcome = outcomes.find(o => o.name === 'No');
+  
+  // Determine if this is a true binary Yes/No market
   const isBinary = yesOutcome && noOutcome;
 
-  // Theme-aware text colors
-  const textPrimary = theme === 'dark' ? 'text-white' : 'text-gray-900';
-  const textSecondary = theme === 'dark' ? 'text-gray-400' : 'text-gray-600';
-  const textVolumeLabel = theme === 'dark' ? 'text-gray-400' : 'text-gray-400';
-  const textVolumeValue = theme === 'dark' ? 'text-white' : 'text-gray-700';
+  // Get the top outcome (highest price)
+  const topOutcome = outcomes[0];
 
-  if (outcomes.length === 0) {
+  if (!topOutcome) {
+    // Return a placeholder card if the market has no outcomes
     return (
-      <div className={`rounded-lg shadow-sm p-4 h-auto ${theme === 'dark' ? 'bg-[#1A2332] border border-gray-700' : 'bg-[#95b89b] border border-[#7a9c7f]'}`}>
-        <span className={`text-xs uppercase ${textSecondary}`}>{market.category}</span>
-        <h3 className={`text-sm font-medium mt-2 ${textPrimary}`}>{market.shortTitle || market.title}</h3>
-        <span className={`text-xs ${textSecondary}`}>Loading...</span>
-      </div>
+        <div className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg p-5 flex flex-col justify-between h-48">
+            <span className="text-xs text-gray-400 uppercase">{market.category}</span>
+            <h3 className="text-base font-semibold text-white line-clamp-3 leading-tight">{market.shortTitle || market.title}</h3>
+            <span className="text-sm text-gray-500">Market data pending...</span>
+        </div>
     );
   }
 
-  // Format volume with commas (user requested: $66,777,056)
-  const formattedVolume = market.volume_24h 
-    ? `$${Math.round(market.volume_24h).toLocaleString()}` 
-    : '$0';
-
-  // Handler to open trade panel for specific outcome
-  const handleTradeClick = (e, outcome, side) => {
-    e.stopPropagation(); // Prevent card click
-    onMarketClick(market, outcome, side); // Pass outcome and side to parent
-  };
-
   return (
     <div
-      className={`rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer p-4 h-auto ${theme === 'dark' ? 'bg-[#1A2332] border border-gray-700 hover:border-blue-500/50' : 'bg-[#95b89b] border border-[#7a9c7f] hover:border-[#6b8a70]'}`}
+      className="bg-gray-950 border border-gray-800 rounded-xl shadow-lg p-5 cursor-pointer hover:border-blue-500 transition-all duration-200 flex flex-col justify-between h-48"
       onClick={() => onMarketClick(market)}
-      title={market.title} // Show full title on hover
     >
-      {/* Market Image */}
-      {market.image && (
-        <div className="mb-3">
-          <MarketImage 
-            imageUrl={market.image} 
-            alt={market.title}
-            size="small"
-            theme={theme}
-          />
-        </div>
-      )}
-
-      {/* Category and Multi-Outcome Badge */}
-      <div className="flex items-center justify-between mb-2">
-        <span className={`text-xs uppercase ${textSecondary}`}>{market.category}</span>
-        {market.isMultiOutcome && (
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-            theme === 'dark' 
-              ? 'bg-purple-900/30 text-purple-300 border border-purple-700/50' 
-              : 'bg-purple-100 text-purple-700 border border-purple-300'
-          }`}>
-            {market.outcomeCount} outcomes
-          </span>
-        )}
-      </div>
-
-      {/* Header: Platform logo and title */}
-      <div className="flex items-start gap-2 mb-3">
+      <div className="flex items-start justify-between mb-2">
+        <span className="text-xs text-gray-400 uppercase">{market.category}</span>
         <img
           src={getLogo(market.platform)}
           alt={market.platform}
-          className="w-6 h-6 rounded-full flex-shrink-0 mt-1"
-          style={market.platform === 'Kalshi' ? { backgroundColor: 'white', padding: '2px' } : {}}
+          className="w-6 h-6 rounded-full"
+          style={market.platform === 'Kalshi' ? { backgroundColor: 'white' } : {}}
         />
-        <h3 className={`text-sm font-medium line-clamp-2 leading-tight flex-1 ${textPrimary}`}>
-          {market.shortTitle || market.title}
+      </div>
+      
+      <div className="mb-4 flex-1">
+        <h3 className="text-base font-semibold text-white line-clamp-3 leading-tight">
+            {market.shortTitle || market.title}
         </h3>
       </div>
-
-      {/* Outcomes Section */}
-      <div className="space-y-2 mb-3">
-        {isBinary ? (
-          // Binary Yes/No Market - Show percentage and cents for both
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-semibold ${textPrimary}`}>{(yesOutcome.price * 100).toFixed(1)}%</span>
-                <span className={`text-xs ${textSecondary}`}>Yes ({(yesOutcome.price * 100).toFixed(1)}¢)</span>
-              </div>
-              <button 
-                onClick={(e) => handleTradeClick(e, yesOutcome, 'YES')}
-                className="px-3 py-1.5 bg-green-50 text-green-700 rounded text-xs font-medium hover:bg-green-100 transition-colors"
-              >
-                Yes
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={`text-sm font-semibold ${textPrimary}`}>{(noOutcome.price * 100).toFixed(1)}%</span>
-                <span className={`text-xs ${textSecondary}`}>No ({(noOutcome.price * 100).toFixed(1)}¢)</span>
-              </div>
-              <button 
-                onClick={(e) => handleTradeClick(e, noOutcome, 'NO')}
-                className="px-3 py-1.5 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors"
-              >
-                No
-              </button>
-            </div>
-          </div>
-        ) : (
-          // Multi-outcome Market (show top 2-3)
-          outcomes.slice(0, 3).map((outcome, idx) => (
-            <div key={idx} className="flex items-center justify-between py-1">
-              <div className="flex items-center gap-2 flex-1">
-                <span className="text-xs text-gray-600 truncate max-w-[100px]">{outcome.name}</span>
-                <span className="text-sm font-bold text-gray-900">{(outcome.price * 100).toFixed(0)}%</span>
-              </div>
-              <div className="flex gap-1.5">
-                <button 
-                  onClick={(e) => handleTradeClick(e, outcome, 'YES')}
-                  className="px-2 py-1 bg-green-50 text-green-700 rounded text-xs font-medium hover:bg-green-100 transition-colors"
-                >
-                  Yes
-                </button>
-                <button 
-                  onClick={(e) => handleTradeClick(e, outcome, 'NO')}
-                  className="px-2 py-1 bg-red-50 text-red-700 rounded text-xs font-medium hover:bg-red-100 transition-colors"
-                >
-                  No
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Footer: Historic Volume */}
-      <div className={`flex items-center justify-between pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-        <div className="flex flex-col">
-          <span className={`text-xs ${textVolumeLabel}`}>Historic Volume</span>
-          <span className={`text-sm font-semibold ${textVolumeValue}`}>{formattedVolume}</span>
+      
+      <div className="flex justify-between items-center pt-2 border-t border-gray-800">
+        <div className="text-sm text-gray-500">
+            Vol: ${market.volume_24h ? (market.volume_24h / 1000).toFixed(0) + 'K' : 'N/A'}
         </div>
-        <button className={`w-5 h-5 rounded-full border flex items-center justify-center ${theme === 'dark' ? 'border-gray-600 hover:bg-gray-800' : 'border-gray-300 hover:bg-gray-50'}`}>
-          <span className={`text-xs ${textSecondary}`}>+</span>
-        </button>
+        
+        {/* Price Box */}
+        <div className="flex space-x-2">
+          {isBinary ? (
+            // --- RENDER YES/NO ---
+            <>
+              <div className={`bg-green-600/30 text-green-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+                Yes
+                <div className="text-lg leading-none mt-0.5">{(yesOutcome.price * 100).toFixed(0)}¢</div>
+              </div>
+              <div className={`bg-red-600/30 text-red-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+                No
+                <div className="text-lg leading-none mt-0.5">{(noOutcome.price * 100).toFixed(0)}¢</div>
+              </div>
+            </>
+          ) : (
+            // --- RENDER TOP OUTCOME ---
+            <div className={`bg-blue-600/30 text-blue-300 px-3 py-1 rounded-lg font-bold text-sm text-center min-w-[70px]`}>
+              {topOutcome.name}
+              <div className="text-lg leading-none mt-0.5">{(topOutcome.price * 100).toFixed(0)}¢</div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 // --- MarketListPage Component ---
-function MarketListPage({ markets, onMarketClick, onCategoryChange, activeCategory, isLoading, theme }) {
+function MarketListPage({ markets, onMarketClick }) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [activeFilter, setActiveFilter] = useState(null);
-  const [sortDirection, setSortDirection] = useState('desc');
-  
-  const categories = ['Trending', 'All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
-  
-  const filterOptions = [
-    { id: 'volume', label: 'Volume', icon: <FilterIcon /> },
-    { id: 'probability', label: 'Probability' },
-    { id: 'liquidity', label: 'Liquidity' },
-    { id: 'closing', label: 'Closing Time' }
-  ];
+  const [activeCategory, setActiveCategory] = useState('All');
+  const categories = ['All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
 
-  // Handle filter click
-  const handleFilterClick = (filterId) => {
-    if (activeFilter === filterId) {
-      // Toggle direction if same filter clicked
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
-    } else {
-      // Activate new filter with descending as default
-      setActiveFilter(filterId);
-      setSortDirection('desc');
-    }
-  };
-
-  // Search API call (debounced)
-  useEffect(() => {
-    if (searchTerm.trim().length >= 2) {
-      // User is searching - call backend API
-      const timeoutId = setTimeout(async () => {
-        setIsSearching(true);
-        try {
-          const response = await fetch(`http://92.246.141.205:3001/api/search?q=${encodeURIComponent(searchTerm)}`);
-          const data = await response.json();
-          setSearchResults(data.results || []);
-        } catch (error) {
-          console.error('Search failed:', error);
-          setSearchResults([]);
-        } finally {
-          setIsSearching(false);
-        }
-      }, 500); // 500ms debounce
-      
-      return () => clearTimeout(timeoutId);
-    } else {
-      // Clear search results if query is too short
-      setSearchResults(null);
-    }
-  }, [searchTerm]);
-
-  // Use search results if available, otherwise use regular markets
-  const displayMarkets = searchResults !== null ? searchResults : markets;
-  
-  // Filter by search term (local filter for displayed markets)
-  const searchFiltered = displayMarkets
+  const filteredMarkets = markets
+    .filter(m => activeCategory === 'All' || m.category === activeCategory) 
     .filter(m => m.title && m.title.toLowerCase().includes(searchTerm.toLowerCase()));
-  
-  // Apply sorting with useMemo for performance
-  // Default: Sort by volume (descending) when no filter is active
-  const sortedMarkets = useMemo(() => {
-    if (activeFilter) {
-      return applySorting(searchFiltered, activeFilter, sortDirection);
-    } else {
-      // Default sorting: by volume (highest first) - like Polymarket
-      return sortByVolume(searchFiltered, 'desc');
-    }
-  }, [searchFiltered, activeFilter, sortDirection]);
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
-      {/* Search and Filters Row */}
-      <div className="mb-6 flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
-        {/* Search Bar */}
-        <div className="flex-1 w-full lg:max-w-md">
+      {/* Filters */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4 justify-between items-center">
+        <div className="flex-1 w-full md:w-auto">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <SearchIcon />
@@ -2345,59 +1764,35 @@ function MarketListPage({ markets, onMarketClick, onCategoryChange, activeCatego
               placeholder="Search markets..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className={`w-full pl-10 pr-4 py-2 rounded-lg border focus:outline-none focus:ring-2 ${
-                theme === 'dark' 
-                  ? 'bg-gray-900 text-white border-gray-700 focus:ring-blue-500' 
-                  : 'bg-white text-gray-900 border-[#95b89b] focus:ring-[#95b89b]'
-              }`}
+              className="w-full pl-10 pr-4 py-2 bg-gray-900 text-white rounded-lg border border-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
-        
-        {/* Filter Controls */}
-        <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0">
-          {filterOptions.map(filter => (
-            <FilterButton
-              key={filter.id}
-              filter={filter}
-              isActive={activeFilter === filter.id}
-              sortDirection={sortDirection}
-              onClick={() => handleFilterClick(filter.id)}
-              theme={theme}
-            />
+        <div className="flex space-x-2 bg-gray-800 p-1 rounded-lg overflow-x-auto">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`flex-shrink-0 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                activeCategory === cat
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              {cat}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* Category Tabs */}
-      <div className={`flex space-x-2 p-1 rounded-lg overflow-x-auto mb-6 ${
-        theme === 'dark' ? 'bg-gray-800' : 'bg-gray-100'
-      }`}>
-        {categories.map(cat => (
-          <button
-            key={cat}
-            onClick={() => onCategoryChange(cat)}
-            disabled={isLoading}
-            className={`flex-shrink-0 px-4 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeCategory === cat
-                ? (theme === 'dark' ? 'bg-blue-600 text-white' : 'bg-[#95b89b] text-white')
-                : (theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-200')
-            } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''} ${cat === 'Trending' ? 'mr-4' : ''}`}
-          >
-            {cat === 'Trending' && <NetworkBarsIcon />}
-            {cat}
-          </button>
-        ))}
-      </div>
-
       {/* Market Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {sortedMarkets.length > 0 ? (
-          sortedMarkets.map(market => (
-            <MarketCard key={market.id} market={market} onMarketClick={onMarketClick} theme={theme} />
+        {filteredMarkets.length > 0 ? (
+          filteredMarkets.map(market => (
+            <MarketCard key={market.id} market={market} onMarketClick={onMarketClick} />
           ))
         ) : (
-          <p className={`col-span-full text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+          <p className="text-gray-400 col-span-full text-center">
             {markets.length === 0 ? "Loading markets..." : "No markets found matching your criteria."}
           </p>
         )}
@@ -2418,12 +1813,6 @@ let db;
 let auth;
 
 export default function App() {
-  // --- Theme State ---
-  const [theme, setTheme] = useState(() => {
-    // Check localStorage for saved theme, default to 'light'
-    return localStorage.getItem('theme') || 'light';
-  });
-
   // --- State ---
   const [markets, setMarkets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -2466,18 +1855,6 @@ export default function App() {
 
   const navItems = ['Markets', 'Portfolio', 'Leaderboard', 'Referrals'];
 
-  // --- Theme Effect ---
-  useEffect(() => {
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', theme);
-    // Save to localStorage
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
-
   // --- Handlers ---
   const handleAddNotification = (message) => {
     setNotifications(prev => [
@@ -2487,11 +1864,9 @@ export default function App() {
   };
 
   // --- Firebase Auth & Setup (FIXED) ---
-  // Define appId at component level so it's accessible in all useEffects
-  const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-
   useEffect(() => {
     // FIX: Read globals from window object *inside* useEffect
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
@@ -2607,15 +1982,12 @@ export default function App() {
   }, [dbInstance, currentUserId, isAuthReady, isDataSeeded]); // Added isDataSeeded
 
 
-  // --- Category State ---
-  const [activeCategory, setActiveCategory] = useState('All');
-
-  // --- Data Fetching (Markets by Category) ---
+  // --- Data Fetching (Markets) ---
   useEffect(() => {
     const loadMarkets = async () => {
       setIsLoading(true);
       try {
-        const data = await fetchMarketsByCategory(activeCategory, setToastMessage);
+        const data = await fetchMarkets(setToastMessage);
         if (Array.isArray(data)) {
             setMarkets(data);
         } else {
@@ -2630,39 +2002,10 @@ export default function App() {
       setIsLoading(false);
     };
     loadMarkets();
-  }, [activeCategory]); // Re-fetch when category changes
+  }, []);
 
-  // --- Category Change Handler ---
-  const handleCategoryChange = (category) => {
-    setActiveCategory(category);
-    handleAddNotification(`Loading ${category} markets...`);
-  };
 
-  // --- Real-time Data Updates (Every 5 seconds) ---
-  useEffect(() => {
-    // Only run on markets page and not when viewing market detail
-    if (activeNav !== 'markets' || selectedMarket) {
-      return;
-    }
-
-    // Set up 5-second interval for auto-refresh
-    const updateInterval = setInterval(async () => {
-      try {
-        const data = await fetchMarketsByCategory(activeCategory, null);
-        if (Array.isArray(data)) {
-          setMarkets(data);
-        }
-      } catch (error) {
-        // Silent failure - will retry on next interval
-        console.error('Auto-update failed:', error);
-      }
-    }, 5000); // 5 seconds
-
-    // Cleanup interval on unmount or when dependencies change
-    return () => clearInterval(updateInterval);
-  }, [activeNav, activeCategory, selectedMarket]);
-
-  // --- Live Price Update Stream (Simulated WebSocket for smooth animations) ---
+  // --- Live Price Update Stream ---
   useSimulatedWebSocket(markets, setMarkets, handleAddNotification);
 
 
@@ -2816,16 +2159,9 @@ export default function App() {
     setToastMessage("Wallet Disconnected");
   };
 
-  const handleMarketClick = (market, outcome = null, side = 'YES') => {
+  const handleMarketClick = (market) => {
     setSelectedMarket(market);
-    if (outcome) {
-      // If outcome is provided, open trade panel immediately
-      setSelectedOutcome(outcome);
-      setTradeSide(side);
-    } else {
-      // Otherwise just open market detail page
-      setSelectedOutcome(null);
-    }
+    setSelectedOutcome(null); 
   };
 
   const handleBackToMarkets = () => {
@@ -3155,21 +2491,13 @@ export default function App() {
           onSelectOutcome={handleSelectOutcome}
           tradeSide={tradeSide}
           onCloseTradePanel={handleCloseTradePanel}
-          theme={theme}
         />
       );
     }
     
     switch (activeNav) { 
       case 'markets':
-        return <MarketListPage 
-          markets={markets} 
-          onMarketClick={handleMarketClick} 
-          onCategoryChange={handleCategoryChange}
-          activeCategory={activeCategory}
-          isLoading={isLoading}
-          theme={theme}
-        />;
+        return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
       case 'portfolio':
         if (!userAddress) {
           return <ConnectWalletPrompt onConnect={handleConnectWallet} />;
@@ -3192,18 +2520,11 @@ export default function App() {
       case 'linkAccounts':
           return <LinkAccountsPage onBack={handleBackToPortfolio} />
       case 'leaderboard':
-        return <LeaderboardPage leaderboardData={leaderboardData} theme={theme} />;
+        return <LeaderboardPage leaderboardData={leaderboardData} />;
       case 'referrals':
-        return <ReferralsPage setToastMessage={setToastMessage} theme={theme} />;
+        return <ReferralsPage setToastMessage={setToastMessage} />;
       default:
-        return <MarketListPage 
-          markets={markets} 
-          onMarketClick={handleMarketClick}
-          onCategoryChange={handleCategoryChange}
-          activeCategory={activeCategory}
-          isLoading={isLoading}
-          theme={theme}
-        />;
+        return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
     }
   };
 
@@ -3217,31 +2538,8 @@ export default function App() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans ${theme === 'dark' ? 'bg-[#0B1120] text-white' : 'bg-white text-gray-900'}`}>
+    <div className="bg-black text-white min-h-screen flex flex-col font-sans">
       <style>{`
-        /* Theme Variables */
-        :root[data-theme="dark"] {
-          --bg-primary: #0B1120;
-          --bg-secondary: #131B2E;
-          --bg-tertiary: #1A2332;
-          --border-color: #2D3748;
-          --text-primary: #FFFFFF;
-          --text-secondary: #A0AEC0;
-          --accent-blue: #3B82F6;
-          --accent-green: #10B981;
-        }
-        
-        :root[data-theme="light"] {
-          --bg-primary: #FFFFFF;
-          --bg-secondary: #F7FAFC;
-          --bg-tertiary: #EDF2F7;
-          --border-color: #E2E8F0;
-          --text-primary: #1A202C;
-          --text-secondary: #718096;
-          --accent-blue: #3B82F6;
-          --accent-green: #10B981;
-        }
-        
         @keyframes marquee {
           0% { transform: translateX(0%); }
           100% { transform: translateX(-50%); }
@@ -3261,11 +2559,8 @@ export default function App() {
         onDisconnect={handleDisconnectWallet}
         onBellClick={() => setIsNotifOpen(prev => !prev)}
         notifCount={notifications.length}
-        portfolioBalance={portfolioBalance}
-        theme={theme}
-        onThemeToggle={toggleTheme}
       />
-      <TickerTape newsItems={mockNews} theme={theme} />
+      <TickerTape newsItems={mockNews} />
       <div className="flex-1 container mx-auto px-4 sm:px-6 lg:px-8">
         {renderPage()}
       </div>
