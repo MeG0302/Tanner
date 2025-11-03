@@ -5,6 +5,15 @@ export default defineConfig({
   plugins: [react()],
   // We explicitly set the base path to '/'
   base: '/',
+  build: {
+    target: 'esnext', // Support top-level await
+    minify: 'esbuild',
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext', // Support top-level await in dependencies
+    }
+  },
   server: {
     host: '0.0.0.0', // Binds to all network interfaces
     port: 5173,
