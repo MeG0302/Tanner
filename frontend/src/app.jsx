@@ -2487,9 +2487,11 @@ export default function App() {
   };
 
   // --- Firebase Auth & Setup (FIXED) ---
+  // Define appId at component level so it's accessible in all useEffects
+  const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
   useEffect(() => {
     // FIX: Read globals from window object *inside* useEffect
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
     const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
     const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
