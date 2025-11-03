@@ -1,4 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import './app.css';
+
+// Unified Market Components
+import UnifiedMarketCard from './UnifiedMarketCard.jsx';
+import PlatformComparison from './PlatformComparison.jsx';
+import MultiPlatformChart from './MultiPlatformChart.jsx';
+import OrderbookComparison from './OrderbookComparison.jsx';
+import ArbitrageAlert from './ArbitrageAlert.jsx';
+import useStalenessWarning from './useStalenessWarning.js';
 
 // --- NEW: Web3 Constants ---
 const USDC_CONTRACT_ADDRESS = '0x94a9D9AC8a22534E3FaCa422B7D3B74064fCaBf4'; // Sepolia USDC
@@ -1660,6 +1669,60 @@ function TickerTape({ newsItems }) {
   );
 }
 
+// --- Sorting Functions for Market Filters ---
+
+// Sort by Volume (using volume_24h field)
+function sortByVolume(markets, direction) {
+  return [...markets].sort((a, b) => {
+    const volA = a.volume_24h || 0;
+    const volB = b.volume_24h || 0;
+    return direction === 'asc' ? volA - volB : volB - volA;
+  });
+}
+
+// Sort by Probability (highest outcome price)
+function sortByProbability(markets, direction) {
+  return [...markets].sort((a, b) => {
+    // Get highest outcome probability
+    const probA = Math.max(...(a.outcomes?.map(o => o.price) || [0]));
+    const probB = Math.max(...(b.outcomes?.map(o => o.price) || [0]));
+    return direction === 'asc' ? probA - probB : probB - probA;
+  });
+}
+
+// Sort by Liquidity (using volume_24h as proxy)
+function sortByLiquidity(markets, direction) {
+  // Same as volume for now (using volume_24h as liquidity proxy)
+  return sortByVolume(markets, direction);
+}
+
+// Sort by Closing Time (endDate field)
+function sortByClosingTime(markets, direction) {
+  return [...markets].sort((a, b) => {
+    const dateA = a.endDate ? new Date(a.endDate).getTime() : Infinity;
+    const dateB = b.endDate ? new Date(b.endDate).getTime() : Infinity;
+    return direction === 'asc' ? dateA - dateB : dateB - dateA;
+  });
+}
+
+// Unified sorting function to handle all filter types
+function applySorting(markets, filterType, direction) {
+  if (!filterType) return markets;
+  
+  switch (filterType) {
+    case 'volume':
+      return sortByVolume(markets, direction);
+    case 'probability':
+      return sortByProbability(markets, direction);
+    case 'liquidity':
+      return sortByLiquidity(markets, direction);
+    case 'closing':
+      return sortByClosingTime(markets, direction);
+    default:
+      return markets;
+  }
+}
+
 // --- MarketCard Component (FIXED) ---
 function MarketCard({ market, onMarketClick }) {
     
@@ -1741,7 +1804,16 @@ function MarketCard({ market, onMarketClick }) {
 }
 
 // --- MarketListPage Component ---
-function MarketListPage({ markets, onMarketClick }) {
+function MarketListPage({ 
+  markets, 
+  onMarketClick, 
+  showUnifiedView, 
+  onToggleUnifiedView, 
+  unifiedMarkets, 
+  onUnifiedMarketClick,
+  arbitrageOpportunities,
+  platformHealth 
+}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const categories = ['All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
@@ -1749,6 +1821,10 @@ function MarketListPage({ markets, onMarketClick }) {
   const filteredMarkets = markets
     .filter(m => activeCategory === 'All' || m.category === activeCategory) 
     .filter(m => m.title && m.title.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const filteredUnifiedMarkets = unifiedMarkets
+    .filter(m => activeCategory === 'All' || m.category === activeCategory)
+    .filter(m => m.question && m.question.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <main className="flex-1 overflow-y-auto p-8">
@@ -1768,6 +1844,20 @@ function MarketListPage({ markets, onMarketClick }) {
             />
           </div>
         </div>
+        
+        {/* Unified View Toggle */}
+        <button
+          onClick={onToggleUnifiedView}
+          className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+            showUnifiedView
+              ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg'
+              : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+          }`}
+          title={showUnifiedView ? 'Switch to standard view' : 'Switch to unified multi-platform view'}
+        >
+          {showUnifiedView ? '🔗 Unified View' : '📊 Standard View'}
+        </button>
+
         <div className="flex space-x-2 bg-gray-800 p-1 rounded-lg overflow-x-auto">
           {categories.map(cat => (
             <button
@@ -1785,16 +1875,46 @@ function MarketListPage({ markets, onMarketClick }) {
         </div>
       </div>
 
+      {/* Arbitrage Opportunities Alert */}
+      {showUnifiedView && arbitrageOpportunities && arbitrageOpportunities.length > 0 && (
+        <div className="mb-6">
+          <ArbitrageAlert 
+            opportunities={arbitrageOpportunities}
+            theme="dark"
+          />
+        </div>
+      )}
+
       {/* Market Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {filteredMarkets.length > 0 ? (
-          filteredMarkets.map(market => (
-            <MarketCard key={market.id} market={market} onMarketClick={onMarketClick} />
-          ))
+        {showUnifiedView ? (
+          // Unified Markets View
+          filteredUnifiedMarkets.length > 0 ? (
+            filteredUnifiedMarkets.map(market => (
+              <UnifiedMarketCard
+                key={market.unified_id || market.id}
+                market={market}
+                onClick={() => onUnifiedMarketClick(market)}
+                theme="dark"
+                platformHealth={platformHealth}
+              />
+            ))
+          ) : (
+            <p className="text-gray-400 col-span-full text-center">
+              {unifiedMarkets.length === 0 ? "Loading unified markets..." : "No unified markets found matching your criteria."}
+            </p>
+          )
         ) : (
-          <p className="text-gray-400 col-span-full text-center">
-            {markets.length === 0 ? "Loading markets..." : "No markets found matching your criteria."}
-          </p>
+          // Standard Markets View
+          filteredMarkets.length > 0 ? (
+            filteredMarkets.map(market => (
+              <MarketCard key={market.id} market={market} onMarketClick={onMarketClick} />
+            ))
+          ) : (
+            <p className="text-gray-400 col-span-full text-center">
+              {markets.length === 0 ? "Loading markets..." : "No markets found matching your criteria."}
+            </p>
+          )
         )}
       </div>
     </main>
@@ -1852,6 +1972,13 @@ export default function App() {
   // --- Modal State ---
   const [modalState, setModalState] = useState({ type: null, isOpen: false }); 
   const [closePositionState, setClosePositionState] = useState({ position: null, isOpen: false });
+
+  // --- Unified Market State ---
+  const [showUnifiedView, setShowUnifiedView] = useState(false);
+  const [unifiedMarkets, setUnifiedMarkets] = useState([]);
+  const [selectedUnifiedMarket, setSelectedUnifiedMarket] = useState(null);
+  const [arbitrageOpportunities, setArbitrageOpportunities] = useState([]);
+  const [platformHealth, setPlatformHealth] = useState({});
 
   const navItems = ['Markets', 'Portfolio', 'Leaderboard', 'Referrals'];
 
@@ -2004,6 +2131,85 @@ export default function App() {
     loadMarkets();
   }, []);
 
+  // --- Unified Market Data Fetching Functions ---
+  const fetchUnifiedMarkets = async (category = 'All') => {
+    try {
+      console.log(`Fetching unified markets for category: ${category}`);
+      const API_URL = 'http://92.246.141.205:3001';
+      const response = await fetch(`${API_URL}/api/unified-markets/${category}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(`Fetched ${data.length} unified markets`);
+      setUnifiedMarkets(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching unified markets:', error);
+      setToastMessage('Failed to load unified markets');
+      return [];
+    }
+  };
+
+  const fetchArbitrageOpportunities = async () => {
+    try {
+      console.log('Fetching arbitrage opportunities...');
+      const API_URL = 'http://92.246.141.205:3001';
+      const response = await fetch(`${API_URL}/api/arbitrage-opportunities`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log(`Found ${data.length} arbitrage opportunities`);
+      setArbitrageOpportunities(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching arbitrage opportunities:', error);
+      return [];
+    }
+  };
+
+  const fetchPlatformHealth = async () => {
+    try {
+      console.log('Fetching platform health...');
+      const API_URL = 'http://92.246.141.205:3001';
+      const response = await fetch(`${API_URL}/api/platform-health`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      console.log('Platform health:', data);
+      setPlatformHealth(data);
+      return data;
+    } catch (error) {
+      console.error('Error fetching platform health:', error);
+      return {};
+    }
+  };
+
+  // --- Unified Market Data Fetching useEffect ---
+  useEffect(() => {
+    if (showUnifiedView) {
+      console.log('Unified view enabled, fetching unified market data...');
+      fetchUnifiedMarkets('All');
+      fetchArbitrageOpportunities();
+      fetchPlatformHealth();
+    }
+  }, [showUnifiedView]);
+
+  // Auto-refresh unified data every 30 seconds when in unified view
+  useEffect(() => {
+    if (!showUnifiedView) return;
+    
+    const interval = setInterval(() => {
+      console.log('Auto-refreshing unified market data...');
+      fetchUnifiedMarkets('All');
+      fetchArbitrageOpportunities();
+      fetchPlatformHealth();
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(interval);
+  }, [showUnifiedView]);
 
   // --- Live Price Update Stream ---
   useSimulatedWebSocket(markets, setMarkets, handleAddNotification);
@@ -2497,7 +2703,18 @@ export default function App() {
     
     switch (activeNav) { 
       case 'markets':
-        return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
+        return (
+          <MarketListPage 
+            markets={markets} 
+            onMarketClick={handleMarketClick}
+            showUnifiedView={showUnifiedView}
+            onToggleUnifiedView={() => setShowUnifiedView(!showUnifiedView)}
+            unifiedMarkets={unifiedMarkets}
+            onUnifiedMarketClick={setSelectedUnifiedMarket}
+            arbitrageOpportunities={arbitrageOpportunities}
+            platformHealth={platformHealth}
+          />
+        );
       case 'portfolio':
         if (!userAddress) {
           return <ConnectWalletPrompt onConnect={handleConnectWallet} />;
@@ -2524,7 +2741,18 @@ export default function App() {
       case 'referrals':
         return <ReferralsPage setToastMessage={setToastMessage} />;
       default:
-        return <MarketListPage markets={markets} onMarketClick={handleMarketClick} />;
+        return (
+          <MarketListPage 
+            markets={markets} 
+            onMarketClick={handleMarketClick}
+            showUnifiedView={showUnifiedView}
+            onToggleUnifiedView={() => setShowUnifiedView(!showUnifiedView)}
+            unifiedMarkets={unifiedMarkets}
+            onUnifiedMarketClick={setSelectedUnifiedMarket}
+            arbitrageOpportunities={arbitrageOpportunities}
+            platformHealth={platformHealth}
+          />
+        );
     }
   };
 
@@ -2594,6 +2822,97 @@ export default function App() {
         market={markets.find(m => m.id === closePositionState.position?.marketId)}
         onConfirmClose={handleConfirmClosePosition}
       />
+      
+      {/* Unified Market Detail Modal */}
+      {selectedUnifiedMarket && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-70 backdrop-blur-sm"
+          onClick={() => setSelectedUnifiedMarket(null)}
+        >
+          <div 
+            className="bg-gray-950 border border-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] overflow-y-auto p-6 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  {selectedUnifiedMarket.question}
+                </h2>
+                <div className="flex gap-2 flex-wrap">
+                  {selectedUnifiedMarket.platforms?.map(platform => (
+                    <span 
+                      key={platform} 
+                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                        platform === 'Polymarket' 
+                          ? 'bg-purple-900/30 text-purple-400 border border-purple-500/50'
+                          : 'bg-orange-900/30 text-orange-400 border border-orange-500/50'
+                      }`}
+                    >
+                      {platform}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedUnifiedMarket(null)}
+                className="text-gray-400 hover:text-white text-2xl font-bold ml-4"
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Platform Comparison */}
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span>🔗</span> Platform Comparison
+              </h3>
+              <PlatformComparison 
+                market={selectedUnifiedMarket}
+                theme="dark"
+                platformHealth={platformHealth}
+              />
+            </div>
+
+            {/* Multi-Platform Chart */}
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span>📈</span> Price History
+              </h3>
+              <div className="bg-gray-900 rounded-lg p-4">
+                <MultiPlatformChart 
+                  market={selectedUnifiedMarket}
+                  theme="dark"
+                />
+              </div>
+            </div>
+
+            {/* Orderbook Comparison */}
+            <div className="mb-6">
+              <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                <span>📊</span> Orderbook Comparison
+              </h3>
+              <OrderbookComparison 
+                market={selectedUnifiedMarket}
+                theme="dark"
+              />
+            </div>
+
+            {/* Arbitrage Alert if applicable */}
+            {selectedUnifiedMarket.arbitrage_opportunity && (
+              <div className="mb-6">
+                <h3 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+                  <span>🚨</span> Arbitrage Opportunity
+                </h3>
+                <ArbitrageAlert 
+                  opportunities={[selectedUnifiedMarket.arbitrage_opportunity]}
+                  theme="dark"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
