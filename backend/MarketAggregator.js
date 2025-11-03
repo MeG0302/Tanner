@@ -121,19 +121,22 @@ class MarketAggregator {
     try {
       console.log('[MarketAggregator] Fetching Polymarket markets...');
       
-      // For now, we'll use the existing fetchPolymarketData function
-      // In a full implementation, this would use a PolymarketFetcher class
-      // similar to KalshiFetcher
+      if (!this.polymarketFetcher) {
+        console.warn('[MarketAggregator] Polymarket fetcher not available');
+        return [];
+      }
       
-      // Since we don't have a separate PolymarketFetcher class yet,
-      // we'll return an empty array and let the existing server.js
-      // handle Polymarket fetching for now
+      // Fetch raw markets from Polymarket
+      const rawMarkets = await this.polymarketFetcher.fetchMarkets(options);
       
-      // This is a placeholder - the actual implementation would be:
-      // return await this.polymarketFetcher.fetchMarkets(options);
+      // Normalize markets to unified schema
+      const normalizedMarkets = rawMarkets
+        .map(market => this.polymarketFetcher.normalizeMarket(market))
+        .filter(Boolean); // Remove any null results
       
-      console.log('[MarketAggregator] Polymarket fetcher not yet implemented, returning empty array');
-      return [];
+      console.log(`[MarketAggregator] Normalized ${normalizedMarkets.length} Polymarket markets`);
+      
+      return normalizedMarkets;
       
     } catch (error) {
       console.error('[MarketAggregator] Polymarket fetch failed:', error.message);
