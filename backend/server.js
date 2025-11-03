@@ -15,6 +15,7 @@ const cors = require('cors');
 
 // Import unified market aggregation components
 const PolymarketFetcher = require('./PolymarketFetcher');
+const KalshiFetcher = require('./KalshiFetcher');
 const MarketMatchingEngine = require('./MarketMatchingEngine');
 const MarketAggregator = require('./MarketAggregator');
 const ArbitrageDetector = require('./ArbitrageDetector');
@@ -666,6 +667,352 @@ console.log('[Cache] Cleanup interval started (runs every 2 minutes)');
 // ====================================================================
 // KALSHI API FETCHER (Unified Market Aggregation)
 // ====================================================================
+// PLATFORM FETCHERS
+// ====================================================================
+
+/**
+ * PolymarketFetcher - Polymarket API integration
+ * 
+ * This class handles fetching and normalizing market data from the Polymarket Gamma API.
+ * 
+ * Key responsibilities:
+ * 1. Fetch markets from Polymarket with pagination support
+ * 2. Rate limiting (100 requests per minute)
+ * 3. Error handling with exponential backoff retry
+ * 4. Data normalization to unified schema
+ * 
+ * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5
+ */
+class PolymarketFetcher {
+  constructor(apiEndpoint, cacheManager) {
+    this.apiEndpoint = apiEndpoint || 'https://gamma-api.polymarket.com';
+    this.cache = cacheManager;
+    this.rateLimit = 100; // requests per minute
+    this.requestQueue = [];
+    this.healthStatus = {
+      status: 'healthy',
+      lastAttempt: null,
+      lastError: null,
+      lastSuccessfulFetch: null
+    };
+    
+    console.log('[PolymarketFetcher] Initialized with endpoint:', this.apiEndpoint);
+  }
+  
+  async fetchMarkets(options = {}) {
+    try {
+      console.log('[PolymarketFetcher] Fetching markets...');
+      
+      const limit = options.limit || 1000;
+      const maxPages = options.maxPages || 10;
+      let allMarkets = [];
+      let pagesFetched = 0;
+      let offset = options.offset || 0;
+      
+      while (pagesFetched < maxPages) {
+        await this.throttle();
+        
+        const params = new URLSearchParams({
+          active: options.active !== undefined ? options.active : true,
+          closed: options.closed !== undefined ? options.closed : false,
+          limit: limit,
+          offset: offset
+        });
+        
+        const url = `${this.apiEndpoint}/markets?${params.toString()}`;
+        console.log(`[PolymarketFetcher] Fetching page ${pagesFetched + 1}/${maxPages} at offset ${offset}...`);
+        
+        const data = await this.fetchWithRetry(url);
+        const marketArray = Array.isArray(data) ? data : [];
+        
+        if (marketArray.length === 0) {
+          console.log(`[PolymarketFetcher] Reached last page (no more markets)`);
+          break;
+        }
+        
+        console.log(`[PolymarketFetcher] Fetched ${marketArray.length} markets at offset ${offset}`);
+        allMarkets = allMarkets.concat(marketArray);
+        offset += limit;
+        pagesFetched++;
+        
+        if (marketArray.length < limit) {
+          console.log(`[PolymarketFetcher] Got ${marketArray.length} markets (less than ${limit}), stopping pagination`);
+          break;
+        }
+      }
+      
+      console.log(`[PolymarketFetcher] Total fetched: ${allMarkets.length} markets from ${pagesFetched} page(s)`);
+      this.updateHealthStatus('healthy');
+      this.logRequest('fetchMarkets', allMarkets.length);
+      
+      return allMarkets;
+      
+    } catch (error) {
+      console.error('[PolymarketFetcher] Failed to fetch markets:', error.message);
+      this.updateHealthStatus('degraded', error);
+      throw error;
+    }
+  }
+  
+  async fetchMarketDetails(marketId) {
+    try {
+      console.log(`[PolymarketFetcher] Fetching details for market: ${marketId}`);
+      await this.throttle();
+      
+      const url = `${this.apiEndpoint}/markets/${marketId}`;
+      const data = await this.fetchWithRetry(url);
+      
+      if (!data) {
+        throw new Error('Invalid Polymarket market details response');
+      }
+      
+      console.log(`[PolymarketFetcher] Fetched details for ${marketId}`);
+      this.updateHealthStatus('healthy');
+      this.logRequest('fetchMarketDetails', 1);
+      
+      return data;
+      
+    } catch (error) {
+      console.error(`[PolymarketFetcher] Failed to fetch market details for ${marketId}:`, error.message);
+      this.updateHealthStatus('degraded', error);
+      throw error;
+    }
+  }
+  
+  async fetchWithRetry(url, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const data = await this.nativeFetch(url);
+        this.updateHealthStatus('healthy');
+        return data;
+        
+      } catch (error) {
+        lastError = error;
+        console.error(`[PolymarketFetcher] Fetch attempt ${attempt}/${maxRetries} failed:`, error.message);
+        
+        if (attempt < maxRetries) {
+          const delay = Math.pow(2, attempt) * 1000;
+          console.log(`[PolymarketFetcher] Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    this.updateHealthStatus('degraded', lastError);
+    throw new Error(`Failed to fetch from Polymarket after ${maxRetries} attempts: ${lastError.message}`);
+  }
+  
+  async nativeFetch(url) {
+    return new Promise((resolve, reject) => {
+      const urlObj = new URL(url);
+      const options = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || 443,
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Tanner.xyz-Aggregator/1.0'
+        }
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              resolve(JSON.parse(data));
+            } catch (e) {
+              console.error(`[PolymarketFetcher] JSON Parse Error: ${e.message}`);
+              reject(new Error(`Failed to parse JSON response. Status: ${res.statusCode}`));
+            }
+          } else {
+            console.error(`[PolymarketFetcher] HTTP Error: Status ${res.statusCode}`);
+            reject(new Error(`HTTP Error Status: ${res.statusCode} for ${url}`));
+          }
+        });
+      });
+      
+      req.on('error', (err) => {
+        reject(new Error(`Polymarket Fetch Error: ${err.message}`));
+      });
+      
+      req.end();
+    });
+  }
+  
+  async throttle() {
+    const now = Date.now();
+    const oneMinute = 60 * 1000;
+    
+    this.requestQueue = this.requestQueue.filter(time => now - time < oneMinute);
+    
+    if (this.requestQueue.length >= this.rateLimit) {
+      const oldestRequest = this.requestQueue[0];
+      const waitTime = oneMinute - (now - oldestRequest);
+      
+      console.log(`[PolymarketFetcher] Rate limit reached (${this.rateLimit}/min), waiting ${waitTime}ms...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      
+      this.requestQueue.shift();
+    }
+    
+    this.requestQueue.push(now);
+  }
+  
+  normalizeMarket(rawMarket) {
+    try {
+      const question = rawMarket.question || rawMarket.title || '';
+      
+      if (!question) {
+        console.warn('[PolymarketFetcher] Market missing question, skipping');
+        return null;
+      }
+      
+      const category = this.extractCategory(rawMarket);
+      const volume = this.extractVolume(rawMarket);
+      const liquidity = this.extractLiquidity(rawMarket);
+      const outcomes = this.extractOutcomes(rawMarket);
+      
+      if (!outcomes || outcomes.length === 0) {
+        console.warn('[PolymarketFetcher] Market has no valid outcomes, skipping');
+        return null;
+      }
+      
+      const isMultiOutcome = outcomes.length > 2;
+      
+      return {
+        id: `poly-${rawMarket.id || rawMarket.condition_id}`,
+        platform: 'polymarket',
+        question: question,
+        outcomes: outcomes,
+        volume_24h: volume,
+        liquidity: liquidity,
+        endDate: rawMarket.end_date_iso || rawMarket.endDate || null,
+        category: category,
+        image: rawMarket.image || rawMarket.icon || null,
+        orderbook: null,
+        spread: this.calculateSpread(outcomes),
+        lastUpdate: Date.now(),
+        closed: rawMarket.closed || false,
+        resolved: rawMarket.resolved || false,
+        isMultiOutcome: isMultiOutcome,
+        outcomeCount: outcomes.length,
+        marketType: isMultiOutcome ? 'multi-outcome' : 'binary'
+      };
+      
+    } catch (error) {
+      console.error('[PolymarketFetcher] Error normalizing market:', error.message);
+      return null;
+    }
+  }
+  
+  extractCategory(rawMarket) {
+    if (rawMarket.category) return rawMarket.category;
+    if (rawMarket.tags && Array.isArray(rawMarket.tags) && rawMarket.tags.length > 0) {
+      return rawMarket.tags[0];
+    }
+    
+    const question = (rawMarket.question || '').toLowerCase();
+    if (question.includes('election') || question.includes('president') || question.includes('senate')) return 'Politics';
+    if (question.includes('crypto') || question.includes('bitcoin') || question.includes('ethereum')) return 'Crypto';
+    if (question.includes('sports') || question.includes('nfl') || question.includes('nba')) return 'Sports';
+    if (question.includes('economy') || question.includes('gdp') || question.includes('inflation')) return 'Economics';
+    
+    return 'Other';
+  }
+  
+  extractVolume(rawMarket) {
+    return parseFloat(rawMarket.volume || rawMarket.volume24hr || rawMarket.volume_24h || rawMarket.volumeNum || 0);
+  }
+  
+  extractLiquidity(rawMarket) {
+    return parseFloat(rawMarket.liquidity || rawMarket.liquidityNum || rawMarket.open_interest || 0);
+  }
+  
+  extractOutcomes(rawMarket) {
+    const outcomes = [];
+    
+    if (rawMarket.tokens && Array.isArray(rawMarket.tokens) && rawMarket.tokens.length > 0) {
+      rawMarket.tokens.forEach((token, index) => {
+        outcomes.push({
+          name: token.outcome || token.token_id || `Outcome ${index + 1}`,
+          price: this.normalizePrice(token.price),
+          volume: parseFloat(token.volume || 0),
+          image: token.image || null,
+          rank: index + 1
+        });
+      });
+    } else {
+      const yesPrice = this.normalizePrice(rawMarket.outcome_prices?.[0] || rawMarket.yes_price || rawMarket.price || 0.5);
+      const noPrice = this.normalizePrice(rawMarket.outcome_prices?.[1] || rawMarket.no_price || (1 - yesPrice));
+      
+      outcomes.push(
+        { name: 'Yes', price: yesPrice, volume: this.extractVolume(rawMarket) / 2, image: null, rank: 1 },
+        { name: 'No', price: noPrice, volume: this.extractVolume(rawMarket) / 2, image: null, rank: 2 }
+      );
+    }
+    
+    return outcomes;
+  }
+  
+  normalizePrice(price) {
+    if (price === null || price === undefined) return 0.5;
+    let numPrice = parseFloat(price);
+    if (isNaN(numPrice)) return 0.5;
+    if (numPrice > 1) numPrice = numPrice / 100;
+    return Math.max(0, Math.min(1, numPrice));
+  }
+  
+  calculateSpread(outcomes) {
+    if (!outcomes || outcomes.length === 0) return 0.1;
+    
+    if (outcomes.length === 2) {
+      const sum = outcomes[0].price + outcomes[1].price;
+      return Math.abs(1 - sum);
+    } else {
+      const fairPrice = 1 / outcomes.length;
+      const avgDeviation = outcomes.reduce((sum, outcome) => {
+        return sum + Math.abs(outcome.price - fairPrice);
+      }, 0) / outcomes.length;
+      return avgDeviation;
+    }
+  }
+  
+  updateHealthStatus(status, error = null) {
+    this.healthStatus = {
+      status,
+      lastAttempt: Date.now(),
+      lastError: error ? error.message : null,
+      lastSuccessfulFetch: status === 'healthy' ? Date.now() : this.healthStatus.lastSuccessfulFetch
+    };
+    
+    if (this.cache && this.cache.updatePlatformHealth) {
+      this.cache.updatePlatformHealth('polymarket', status, error);
+    }
+  }
+  
+  logRequest(method, resultCount) {
+    console.log(`[PolymarketFetcher] ${method}: ${resultCount} results`);
+  }
+  
+  getHealthStatus() {
+    return {
+      ...this.healthStatus,
+      timeSinceLastSuccess: this.healthStatus.lastSuccessfulFetch 
+        ? Date.now() - this.healthStatus.lastSuccessfulFetch 
+        : null
+    };
+  }
+}
 
 /**
  * KalshiFetcher - Handles authentication, rate limiting, and data fetching from Kalshi API
