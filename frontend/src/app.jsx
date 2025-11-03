@@ -25,8 +25,8 @@ const USDC_ABI = [
 export const fetchMarkets = async (setToastMessage) => {
   console.log("Attempting to fetch LIVE markets from VPS backend...");
 
-  // !!! CRITICAL: REPLACED WITH YOUR ACTUAL VPS IP (92.246.141.205) !!!
-  const API_URL = 'http://92.246.141.205:3001/api/markets';
+  // Use relative URL since frontend is served from same server
+  const API_URL = '/api/markets';
   
   // Added a brief delay to prevent spamming failed requests
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -2135,8 +2135,7 @@ export default function App() {
   const fetchUnifiedMarkets = async (category = 'All') => {
     try {
       console.log(`Fetching unified markets for category: ${category}`);
-      const API_URL = 'http://92.246.141.205:3001';
-      const response = await fetch(`${API_URL}/api/unified-markets/${category}`);
+      const response = await fetch(`/api/unified-markets/${category}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -2154,8 +2153,7 @@ export default function App() {
   const fetchArbitrageOpportunities = async () => {
     try {
       console.log('Fetching arbitrage opportunities...');
-      const API_URL = 'http://92.246.141.205:3001';
-      const response = await fetch(`${API_URL}/api/arbitrage-opportunities`);
+      const response = await fetch(`/api/arbitrage-opportunities`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -2172,8 +2170,7 @@ export default function App() {
   const fetchPlatformHealth = async () => {
     try {
       console.log('Fetching platform health...');
-      const API_URL = 'http://92.246.141.205:3001';
-      const response = await fetch(`${API_URL}/api/platform-health`);
+      const response = await fetch(`/api/platform-health`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
