@@ -17,12 +17,10 @@ const USDC_ABI = [
 export const fetchMarketsByCategory = async (category, setToastMessage) => {
   console.log(`Fetching markets for category: ${category}`);
 
-  // Use special endpoints for Trending and Multi-Outcome
+  // Use special endpoint for Trending
   let API_URL;
   if (category.toLowerCase() === 'trending') {
     API_URL = 'http://92.246.141.205:3001/api/markets/trending';
-  } else if (category.toLowerCase() === 'multi-outcome') {
-    API_URL = 'http://92.246.141.205:3001/api/markets/multi-outcome';
   } else {
     API_URL = `http://92.246.141.205:3001/api/markets/${category}`;
   }
@@ -2268,7 +2266,7 @@ function MarketListPage({ markets, onMarketClick, onCategoryChange, activeCatego
   const [activeFilter, setActiveFilter] = useState(null);
   const [sortDirection, setSortDirection] = useState('desc');
   
-  const categories = ['Trending', 'All', 'Multi-Outcome', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
+  const categories = ['Trending', 'All', 'Politics', 'Geopolitics', 'Crypto', 'Economics', 'Sports', 'World', 'Culture', 'Other'];
   
   const filterOptions = [
     { id: 'volume', label: 'Volume', icon: <FilterIcon /> },
