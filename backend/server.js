@@ -14,6 +14,7 @@ const express = require('express');
 const https = require('https');
 const http = require('http');
 const cors = require('cors');
+const path = require('path');
 
 // Import unified market aggregation components
 const PolymarketFetcher = require('./PolymarketFetcher');
@@ -1822,6 +1823,26 @@ app.get('/api/staleness-status', async (req, res) => {
     });
   }
 });
+
+// ====================================================================
+// SERVE FRONTEND STATIC FILES
+// ====================================================================
+
+// Serve static files from the frontend/dist directory
+const frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDistPath));
+
+// Serve index.html for all non-API routes (SPA support)
+app.get('*', (req, res) => {
+  // Skip API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  res.sendFile(path.join(frontendDistPath, 'index.html'));
+});
+
+console.log('[Server] Static file serving configured for:', frontendDistPath);
 
 // ====================================================================
 // GRACEFUL SHUTDOWN
