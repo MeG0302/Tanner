@@ -1065,6 +1065,7 @@ const arbitrageDetector = new ArbitrageDetector();
 console.log('[ArbitrageDetector] Initialized');
 
 // Initialize Market Aggregator with both fetchers
+// Constructor signature: (polymarketFetcher, kalshiFetcher, cacheManager)
 const marketAggregator = new MarketAggregator(polymarketFetcher, kalshiFetcher, cacheManager);
 console.log('[MarketAggregator] Initialized');
 
