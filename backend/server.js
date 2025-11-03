@@ -665,26 +665,60 @@ const cleanupInterval = setInterval(() => {
 console.log('[Cache] Cleanup interval started (runs every 2 minutes)');
 
 // ====================================================================
-// KALSHI API FETCHER (Unified Market Aggregation)
+// PLATFORM FETCHERS INITIALIZATION
 // ====================================================================
-// PLATFORM FETCHERS
+
+// Initialize Polymarket Fetcher
+const polymarketFetcher = new PolymarketFetcher(
+  'https://gamma-api.polymarket.com',
+  cacheManager
+);
+
+console.log('[PolymarketFetcher] Initialized');
+
+// Initialize Kalshi Fetcher
+const kalshiFetcher = new KalshiFetcher(
+  API_ENDPOINTS.KALSHI_MARKETS.split('?')[0].replace('/markets', ''),
+  process.env.KALSHI_API_KEY,
+  cacheManager
+);
+
+console.log('[KalshiFetcher] Initialized');
+
+// ====================================================================
+// UNIFIED MARKET AGGREGATION COMPONENTS
+// ====================================================================
+
+// Initialize Market Matching Engine
+const matchingEngine = new MarketMatchingEngine();
+console.log('[MatchingEngine] Initialized');
+
+// Initialize Arbitrage Detector
+const arbitrageDetector = new ArbitrageDetector();
+console.log('[ArbitrageDetector] Initialized');
+
+// Initialize Market Aggregator with both fetchers
+const marketAggregator = new MarketAggregator(polymarketFetcher, kalshiFetcher, cacheManager);
+console.log('[MarketAggregator] Initialized');
+
+// Initialize Polling Service for real-time data synchronization
+const pollingService = new PollingService(marketAggregator, cacheManager);
+console.log('[PollingService] Initialized');
+
+// Start polling service
+pollingService.start();
+console.log('[PollingService] Started polling (Polymarket: 5s, Kalshi: 10s)');
+
+// ====================================================================
+// NATIVE HTTP/S FETCH HELPER
 // ====================================================================
 
 /**
- * PolymarketFetcher - Polymarket API integration
- * 
- * This class handles fetching and normalizing market data from the Polymarket Gamma API.
- * 
- * Key responsibilities:
- * 1. Fetch markets from Polymarket with pagination support
- * 2. Rate limiting (100 requests per minute)
- * 3. Error handling with exponential backoff retry
- * 4. Data normalization to unified schema
- * 
- * Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5
+ * Executes a GET request using Node's native HTTP/S module.
+ * @param {string} url The URL to fetch.
+ * @returns {Promise<any>} The parsed JSON data.
  */
-class PolymarketFetcher {
-  constructor(apiEndpoint, cacheManager) {
+function nativeFetch(url) {
     this.apiEndpoint = apiEndpoint || 'https://gamma-api.polymarket.com';
     this.cache = cacheManager;
     this.rateLimit = 100; // requests per minute
